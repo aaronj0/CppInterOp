@@ -78,6 +78,9 @@ static inline char* GetEnv(const char* Var_Name) {
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/Path.h"
 
+// std::regex breaks pytorch's jit: pytorch/pytorch#49460
+#include "llvm/Support/Regex.h"
+
 #ifdef USE_CLING
 
 #include "cling/Interpreter/DynamicLibraryManager.h"
@@ -163,17 +166,24 @@ inline void codeComplete(std::vector<std::string>& Results,
   std::vector<std::string> results;
   size_t column = complete_column;
   I.codeComplete(code, column, results);
+  std::string error;
+  // Regex patterns
+  llvm::Regex removeDefinition("\\[\\#.*\\#\\]");
+  llvm::Regex removeVariableName("(\\ |\\*)+(\\w+)(\\#\\>)");
+  llvm::Regex removeTrailingSpace("\\ *(\\#\\>)");
+  llvm::Regex removeTags("\\<\\#([^#>]*)\\#\\>");
 
   // append cleaned results
   for (auto& r : results) {
-    // remove the definition at the beginning (for example [#int#])
-    r = std::regex_replace(r, std::regex("\\[\\#.*\\#\\]"), "");
+    // remove the definition at the beginning (e.g., [#int#])
+    r = removeDefinition.sub("", r, &error);
     // remove the variable name in <#type name#>
-    r = std::regex_replace(r, std::regex("(\\ |\\*)+(\\w+)(\\#\\>)"), "$1$3");
+    r = removeVariableName.sub("$1$3", r, &error);
     // remove unnecessary space at the end of <#type   #>
-    r = std::regex_replace(r, std::regex("\\ *(\\#\\>)"), "$1");
+    r = removeTrailingSpace.sub("$1", r, &error);
     // remove <# #> to keep only the type
-    r = std::regex_replace(r, std::regex("\\<\\#([^#>]*)\\#\\>"), "$1");
+    r = removeTags.sub("$1", r, &error);
+
     if (r.find(code) == 0)
       Results.push_back(r);
   }
