@@ -608,3 +608,13 @@ bool Destruct(compat::Interpreter& interp, TCppObject_t This,
 bool clang_destruct(CXObject This, CXScope S, bool withFree, size_t nary) {
   return Cpp::Destruct(*getInterpreter(S), This, getDecl(S), withFree, nary);
 }
+
+namespace Cpp {
+std::string GetVersion();
+}
+
+const char* cppinterop_get_version_c() {
+  static std::string g_version_str = Cpp::GetVersion();
+  return g_version_str.c_str();
+}
+

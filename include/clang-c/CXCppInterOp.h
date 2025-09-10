@@ -367,6 +367,7 @@ CINDEX_LINKAGE void clang_invoke(CXScope func, void* result, void** args,
 CINDEX_LINKAGE bool clang_destruct(CXObject This, CXScope S,
                                    bool withFree = true, size_t nary = 0UL);
 
+CINDEX_LINKAGE const char* cppinterop_get_version_c();
 /**
  * @}
  */
