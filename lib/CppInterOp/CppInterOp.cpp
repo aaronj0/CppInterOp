@@ -86,7 +86,12 @@
 #include <unistd.h>
 #endif // WIN32
 
-extern "C" void __clang_Interpreter_SetValueNoAlloc(void *This, void *OutVal, void *OpaqueType, ...);
+extern "C" {
+  void __clang_Interpreter_SetValueWithAlloc(void *This, void *OutVal, void *OpaqueType);
+  void __clang_Interpreter_SetValueNoAlloc(void *This, void *OutVal, void *OpaqueType, ...);
+}
+struct __clang_Interpreter_NewTag {};
+
 namespace Cpp {
 
 using namespace clang;
@@ -3274,7 +3279,17 @@ TInterp_t CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
   )");
 
   sInterpreters->emplace_back(I, /*Owned=*/true);
-  Cpp::InsertOrReplaceJitSymbol("__clang_Interpreter_SetValueNoAlloc", (uint64_t)&__clang_Interpreter_SetValueNoAlloc);
+
+#ifndef CPPINTEROP_USE_CLING
+    __clang_Interpreter_NewTag a;
+    auto VD = llvm::dyn_cast<VarDecl>(a);
+    auto GD = GlobalDecl(VD);
+    std::string mangledName;
+    compat::maybeMangleDeclName(GD, mangledName);
+  Cpp::DefineAbsoluteSymbol("__clang_Interpreter_SetValueWithAlloc", (uint64_t)&__clang_Interpreter_SetValueWithAlloc);
+  Cpp::DefineAbsoluteSymbol("__clang_Interpreter_SetValueNoAlloc", (uint64_t)&__clang_Interpreter_SetValueNoAlloc);
+  Cpp::DefineAbsoluteSymbol("__clang_Interpreter_NewTag", (uint64_t)&__clang_Interpreter_SetValueNoAlloc);
+#endif
   return I;
 }
 
@@ -3552,10 +3567,49 @@ bool InsertOrReplaceJitSymbol(compat::Interpreter& I,
 /// @brief DefineSymbol in the JIT.
 /// @param linker_mangled_name 
 /// @param address 
-/// @return  
+/// @return 
 bool InsertOrReplaceJitSymbol(const char* linker_mangled_name,
                               uint64_t address) {
   return InsertOrReplaceJitSymbol(getInterp(), linker_mangled_name, address);
+}
+
+
+bool DefineAbsoluteSymbol(compat::Interpreter& I,
+                              const char* linker_mangled_name,
+                              uint64_t address) {
+  using namespace llvm;
+  using namespace llvm::orc;
+
+  auto Symbol = compat::getSymbolAddress(I, linker_mangled_name);
+  llvm::orc::LLJIT& Jit = *compat::getExecutionEngine(I);
+  llvm::orc::ExecutionSession& ES = Jit.getExecutionSession();
+  JITDylib& DyLib = *Jit.getProcessSymbolsJITDylib().get();
+
+  // Nothing to define, we are redefining the same function.
+  if (*Symbol && *Symbol == address) {
+    errs() << "[InsertOrReplaceJitSymbol] warning: redefining '"
+           << linker_mangled_name << "' with the same address\n";
+    return true;
+  }
+
+  // Let's inject it.
+  llvm::orc::SymbolMap InjectedSymbols;
+  auto& DL = compat::getExecutionEngine(I)->getDataLayout();
+  char GlobalPrefix = DL.getGlobalPrefix();
+  std::string tmp(linker_mangled_name);
+  if (GlobalPrefix != '\0') {
+    tmp = std::string(1, GlobalPrefix) + tmp;
+  }
+  auto Name = ES.intern(tmp);
+  InjectedSymbols[Name] =
+      ExecutorSymbolDef(ExecutorAddr(address), JITSymbolFlags::Exported);
+
+  if (Error Err = DyLib.define(absoluteSymbols(InjectedSymbols))) {
+    logAllUnhandledErrors(std::move(Err), errs(),
+                          "[InsertOrReplaceJitSymbol] error: ");
+    return true;
+  }
+  return false;
 }
 
 std::string ObjToString(const char* type, void* obj) {
