@@ -70,7 +70,7 @@
 #include <stack>
 #include <string>
 #include <utility>
-
+#include <iostream>
 // Stream redirect.
 #ifdef _WIN32
 #include <io.h>
@@ -86,6 +86,7 @@
 #include <unistd.h>
 #endif // WIN32
 
+extern "C" void __clang_Interpreter_SetValueNoAlloc(void *This, void *OutVal, void *OpaqueType, ...);
 namespace Cpp {
 
 using namespace clang;
@@ -3238,6 +3239,7 @@ TInterp_t CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
 #ifdef CPPINTEROP_USE_CLING
   auto I = new compat::Interpreter(ClingArgv.size(), &ClingArgv[0]);
 #else
+  std::cout<<"Args"<<ClingArgv.data()<<std::endl;
   auto Interp = compat::Interpreter::create(static_cast<int>(ClingArgv.size()),
                                             ClingArgv.data());
   if (!Interp)
@@ -3272,7 +3274,7 @@ TInterp_t CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
   )");
 
   sInterpreters->emplace_back(I, /*Owned=*/true);
-
+  Cpp::InsertOrReplaceJitSymbol("__clang_Interpreter_SetValueNoAlloc", (uint64_t)&__clang_Interpreter_SetValueNoAlloc);
   return I;
 }
 
@@ -3496,26 +3498,26 @@ bool InsertOrReplaceJitSymbol(compat::Interpreter& I,
   using namespace llvm;
   using namespace llvm::orc;
 
-  auto Symbol = compat::getSymbolAddress(I, linker_mangled_name);
+  // auto Symbol = compat::getSymbolAddress(I, linker_mangled_name);
   llvm::orc::LLJIT& Jit = *compat::getExecutionEngine(I);
   llvm::orc::ExecutionSession& ES = Jit.getExecutionSession();
   JITDylib& DyLib = *Jit.getProcessSymbolsJITDylib().get();
 
-  if (Error Err = Symbol.takeError()) {
-    logAllUnhandledErrors(std::move(Err), errs(),
-                          "[InsertOrReplaceJitSymbol] error: ");
-#define DEBUG_TYPE "orc"
-    LLVM_DEBUG(ES.dump(dbgs()));
-#undef DEBUG_TYPE
-    return true;
-  }
+//   if (Error Err = Symbol.takeError()) {
+//     logAllUnhandledErrors(std::move(Err), errs(),
+//                           "[InsertOrReplaceJitSymbol] error1: ");
+// #define DEBUG_TYPE "orc"
+//     LLVM_DEBUG(ES.dump(dbgs()));
+// #undef DEBUG_TYPE
+//     // return true;
+//   }
 
   // Nothing to define, we are redefining the same function.
-  if (*Symbol && *Symbol == address) {
-    errs() << "[InsertOrReplaceJitSymbol] warning: redefining '"
-           << linker_mangled_name << "' with the same address\n";
-    return true;
-  }
+  // if (*Symbol && *Symbol == address) {
+  //   errs() << "[InsertOrReplaceJitSymbol] warning: redefining '"
+  //          << linker_mangled_name << "' with the same address\n";
+  //   // return true;
+  // }
 
   // Let's inject it.
   llvm::orc::SymbolMap InjectedSymbols;
@@ -3530,23 +3532,27 @@ bool InsertOrReplaceJitSymbol(compat::Interpreter& I,
       ExecutorSymbolDef(ExecutorAddr(address), JITSymbolFlags::Exported);
 
   // We want to replace a symbol with a custom provided one.
-  if (Symbol && address)
+  // if (address)
     // The symbol be in the DyLib or in-process.
-    if (auto Err = DyLib.remove({Name})) {
-      logAllUnhandledErrors(std::move(Err), errs(),
-                            "[InsertOrReplaceJitSymbol] error: ");
-      return true;
-    }
+    // if (auto Err = DyLib.remove({Name})) {
+    //   logAllUnhandledErrors(std::move(Err), errs(),
+    //                         "[InsertOrReplaceJitSymbol] error2: ");
+    //   // return true;
+    // }
 
   if (Error Err = DyLib.define(absoluteSymbols(InjectedSymbols))) {
     logAllUnhandledErrors(std::move(Err), errs(),
-                          "[InsertOrReplaceJitSymbol] error: ");
-    return true;
+                          "[InsertOrReplaceJitSymbol] error3: ");
+    // return true;
   }
-
+  
   return false;
 }
 
+/// @brief DefineSymbol in the JIT.
+/// @param linker_mangled_name 
+/// @param address 
+/// @return  
 bool InsertOrReplaceJitSymbol(const char* linker_mangled_name,
                               uint64_t address) {
   return InsertOrReplaceJitSymbol(getInterp(), linker_mangled_name, address);

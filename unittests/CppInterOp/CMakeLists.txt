@@ -18,7 +18,7 @@ add_cppinterop_unittest(CppInterOpTests
   # JitTest.cpp
   # ScopeReflectionTest.cpp
   # TypeReflectionTest.cpp
-  # Utils.cpp
+  Utils.cpp
   # VariableReflectionTest.cpp
   ExternAPI.cpp
   ${EXTRA_TEST_SOURCE_FILES}
