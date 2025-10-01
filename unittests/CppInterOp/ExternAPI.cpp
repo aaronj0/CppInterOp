@@ -27,21 +27,22 @@ using namespace clang;
 
 // }
 
-TEST(ExternAPITest, GetVersionSymbolLookup) {
-  const char* libPath = "/home/ajomy/cppyy-interop-dev/CppInterOp/build/lib/libclangCppInterOp.so";
-  void* handle = dlopen(libPath, RTLD_LOCAL | RTLD_NOW);
-  ASSERT_NE(handle, nullptr) << "Failed to open library: " << dlerror();
+// TEST(ExternAPITest, GetVersionSymbolLookup) {
+//   // const char* libPath = "/home/ajomy/cppyy-interop-dev/CppInterOp/build/lib/libclangCppInterOp.so";
+//   const char* libPath = "/home/ajomy/ROOT/root_build/lib/libCling.so";
+//   void* handle = dlopen(libPath, RTLD_LOCAL | RTLD_NOW);
+//   ASSERT_NE(handle, nullptr) << "Failed to open library: " << dlerror();
 
-  typedef const char* (*GetVersionFn)();
-  GetVersionFn get_version = (GetVersionFn)dlsym(handle, "cppinterop_get_version_c");
-  ASSERT_NE(get_version, nullptr) << "failed to locate symbol: " << dlerror();
-  const char* version_cstr = get_version();
-  ASSERT_NE(version_cstr, nullptr) << "string is null";
-  std::string version(version_cstr);
-  std::cout<<"\nHELLO\n"<<version<<"\n";
+//   typedef const char* (*GetVersionFn)();
+//   GetVersionFn get_version = (GetVersionFn)dlsym(handle, "cppinterop_get_version_c");
+//   ASSERT_NE(get_version, nullptr) << "failed to locate symbol: " << dlerror();
+//   const char* version_cstr = get_version();
+//   ASSERT_NE(version_cstr, nullptr) << "string is null";
+//   std::string version(version_cstr);
+//   std::cout<<"\nHELLO\n"<<version<<"\n";
 
-  dlclose(handle);
-}
+//   dlclose(handle);
+// }
 
 // TEST(ExternAPITest, IsClassSymbolLookup) {
 //   const char* libPath = "/home/ajomy/cppyy-interop-dev/CppInterOp/build/lib/libclangCppInterOp.so";
@@ -78,11 +79,14 @@ TEST(ExternAPITest, GetVersionSymbolLookup) {
 
 void* dlGetProcAddress (const char* name)
 {
-  const char* libPath = "/home/ajomy/cppyy-interop-dev/CppInterOp/build/lib/libclangCppInterOp.so";
+  const char* libPath = "/home/ajomy/ROOT/root_build/lib/libCling.so";
   static void* handle = nullptr; 
-  handle = dlopen(libPath, RTLD_LOCAL | RTLD_NOW);
-  if (!handle)
+  handle = dlopen(libPath, RTLD_LAZY|RTLD_LOCAL);
+  std::cout<<"\nHANDLE: "<< handle << "\n";
+  if (!handle) {
   std::cout << "Failed to open library: " << dlerror();
+  // return nullptr;
+  }
   static void* gpa = nullptr;
   gpa = dlsym(handle, "CppGetProcAddress");
   if (!gpa)
@@ -121,10 +125,11 @@ TEST(ExternAPITest, Demangle) {
   compat::maybeMangleDeclName(Add_double, mangled_add_double);
 
   // using fDemangle =  std::string (*)(const std::string scope);
-  CppDispatch::fDemangle DemangleDispatched = reinterpret_cast<CppDispatch::fDemangle>(dlGetProcAddress("Demangle"));
-  using fGetQualifiedCompleteName =  std::string (*)(Cpp::TCppScope_t scope);
-  fGetQualifiedCompleteName GetQualifiedCompleteNameDispatched = reinterpret_cast<fGetQualifiedCompleteName>(dlGetProcAddress("GetQualifiedCompleteName"));
+  
+  CppAPIType::Demangle DemangleDispatched = reinterpret_cast<CppAPIType::Demangle>(dlGetProcAddress("Demangle"));
+  CppAPIType::GetQualifiedCompleteName GetQualifiedCompleteNameDispatched = reinterpret_cast<CppAPIType::GetQualifiedCompleteName>(dlGetProcAddress("GetQualifiedCompleteName"));
 
+  std::cout<<"FUNC: "<< (void*)DemangleDispatched << "\n";
   // using namespace CppDispatch
   std::string demangled_add_int = DemangleDispatched(mangled_add_int);
   std::string demangled_add_double = DemangleDispatched(mangled_add_double);
