@@ -86,8 +86,8 @@
 #include <unistd.h>
 #endif // WIN32
 
-// extern "C" void *__clang_Interpreter_SetValueWithAlloc(void*, void*, void*);
-extern "C" void __clang_Interpreter_SetValueNoAlloc(void *This, void *OutVal, void *OpaqueType, ...);
+extern "C" void __clang_Interpreter_SetValueNoAlloc(void* This, void* OutVal,
+                                                    void* OpaqueType, ...);
 
 namespace Cpp {
 
@@ -3171,6 +3171,35 @@ CPPINTEROP_API JitCall MakeFunctionCallable(TCppConstFunction_t func) {
   return MakeFunctionCallable(&getInterp(), func);
 }
 
+inline static bool DefineAbsoluteSymbol(compat::Interpreter& I,
+                                        const char* linker_mangled_name,
+                                        uint64_t address) {
+  using namespace llvm;
+  using namespace llvm::orc;
+
+  llvm::orc::LLJIT& Jit = *compat::getExecutionEngine(I);
+  llvm::orc::ExecutionSession& ES = Jit.getExecutionSession();
+  JITDylib& DyLib = *Jit.getProcessSymbolsJITDylib().get();
+
+  llvm::orc::SymbolMap InjectedSymbols;
+  auto& DL = compat::getExecutionEngine(I)->getDataLayout();
+  char GlobalPrefix = DL.getGlobalPrefix();
+  std::string tmp(linker_mangled_name);
+  if (GlobalPrefix != '\0') {
+    tmp = std::string(1, GlobalPrefix) + tmp;
+  }
+  auto Name = ES.intern(tmp);
+  InjectedSymbols[Name] =
+      ExecutorSymbolDef(ExecutorAddr(address), JITSymbolFlags::Exported);
+
+  if (Error Err = DyLib.define(absoluteSymbols(InjectedSymbols))) {
+    logAllUnhandledErrors(std::move(Err), errs(),
+                          "DefineAbsoluteSymbol error: ");
+    return true;
+  }
+  return false;
+}
+
 namespace {
 static std::string MakeResourcesPath() {
   StringRef Dir;
@@ -3196,35 +3225,6 @@ static std::string MakeResourcesPath() {
   return std::string(P.str());
 }
 } // namespace
-
-static bool DefineAbsoluteSymbol(const char* linker_mangled_name,
-                              uint64_t address) {
-  using namespace llvm;
-  using namespace llvm::orc;
-
-  compat::Interpreter &I = getInterp();
-  llvm::orc::LLJIT& Jit = *compat::getExecutionEngine(I);
-  llvm::orc::ExecutionSession& ES = Jit.getExecutionSession();
-  JITDylib& DyLib = *Jit.getProcessSymbolsJITDylib().get();
-
-  llvm::orc::SymbolMap InjectedSymbols;
-  auto& DL = compat::getExecutionEngine(I)->getDataLayout();
-  char GlobalPrefix = DL.getGlobalPrefix();
-  std::string tmp(linker_mangled_name);
-  if (GlobalPrefix != '\0') {
-    tmp = std::string(1, GlobalPrefix) + tmp;
-  }
-  auto Name = ES.intern(tmp);
-  InjectedSymbols[Name] =
-      ExecutorSymbolDef(ExecutorAddr(address), JITSymbolFlags::Exported);
-
-  if (Error Err = DyLib.define(absoluteSymbols(InjectedSymbols))) {
-    logAllUnhandledErrors(std::move(Err), errs(),
-                          "DefineAbsoluteSymbol error: ");
-    return true;
-  }
-  return false;
-}
 
 TInterp_t CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
                             const std::vector<const char*>& GpuArgs /*={}*/) {
@@ -3305,10 +3305,10 @@ TInterp_t CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
 
   sInterpreters->emplace_back(I, /*Owned=*/true);
 
+// define __clang_Interpreter_SetValueNoAlloc in the JIT dylib for clang-repl
 #ifndef CPPINTEROP_USE_CLING
-  // DefineAbsoluteSymbol("__clang_Interpreter_SetValueWithAlloc", (uint64_t)&__clang_Interpreter_SetValueWithAlloc);
-  DefineAbsoluteSymbol("__clang_Interpreter_SetValueNoAlloc", (uint64_t)&__clang_Interpreter_SetValueNoAlloc);
-  // Cpp::DefineAbsoluteSymbol("__clang_Interpreter_NewTag", (uint64_t)&__clang_Interpreter_SetValueNoAlloc);
+  DefineAbsoluteSymbol(*I, "__clang_Interpreter_SetValueNoAlloc",
+                       (uint64_t)&__clang_Interpreter_SetValueNoAlloc);
 #endif
   return I;
 }
