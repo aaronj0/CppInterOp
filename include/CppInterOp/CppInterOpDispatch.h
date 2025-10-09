@@ -137,6 +137,7 @@ extern "C" CPPINTEROP_API void (*CppGetProcAddress(const unsigned char *procname
     DO(Evaluate);               \
     DO(IsDebugOutputEnabled);   \
     DO(EnableDebugOutput);      \
+    DO(GetLatestModule);       \
 
 #define DECLARE_CPP_NULL(func_name) \
     CppAPIType::func_name func_name = nullptr;
@@ -454,6 +455,7 @@ using Destruct = bool(*)(Cpp::TCppObject_t This, Cpp::TCppScope_t scope, bool wi
 
 using MakeFunctionCallable = Cpp::JitCall(*)(Cpp::TCppConstFunction_t func);
 using GetFunctionAddress = Cpp::TCppFuncAddr_t(*)(Cpp::TCppConstFunction_t func);
+using GetLatestModule = uintptr_t(*)();
 } // namespace Cpp
 
 // #ifndef CPPINTEROP_DISPATCH_H

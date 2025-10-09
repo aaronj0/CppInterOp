@@ -119,6 +119,7 @@ static const struct name_address_pair INTEROP_FUNCTIONS[] = {
    { "Evaluate", (__CPP_FUNC) Cpp::Evaluate },
    { "IsDebugOutputEnabled", (__CPP_FUNC) Cpp::IsDebugOutputEnabled },
    { "EnableDebugOutput", (__CPP_FUNC) Cpp::EnableDebugOutput },
+   { "GetLatestModule", (__CPP_FUNC) Cpp::GetLatestModule },
    { NULL, NULL }   /* end of list */
 };
 

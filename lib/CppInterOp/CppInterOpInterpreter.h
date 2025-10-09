@@ -39,6 +39,7 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/TargetParser/Triple.h"
 
+#include <iostream>
 #include <utility>
 #include <vector>
 
@@ -143,6 +144,10 @@ class Interpreter {
 private:
   std::unique_ptr<clang::Interpreter> inner;
 
+  // array of pointers that store addresses to the modules created so far
+  std::vector<void*> m_Modules;
+
+public:
   Interpreter(std::unique_ptr<clang::Interpreter> CI) : inner(std::move(CI)) {}
 
 public:
@@ -269,9 +274,20 @@ public:
     return nullptr;
   }
 
+  void* getLatestModule() const {
+    if (m_Modules.size() > 0)
+      return m_Modules.back();
+    return nullptr;
+  }
+
   CompilationResult declare(const std::string& input,
                             clang::PartialTranslationUnit** PTU = nullptr) {
-    return process(input, /*Value=*/nullptr, PTU);
+    void* modulePtr = nullptr;
+    CompilationResult res = process(input, /*Value=*/nullptr, PTU, false, &modulePtr);
+    if (modulePtr) {
+      std::cout << "Declared module address: " << modulePtr << "\n";
+    }
+    return res;
   }
 
   ///\brief Maybe transform the input line to implement cint command line
@@ -279,7 +295,7 @@ public:
   ///
   CompilationResult process(const std::string& input, clang::Value* V = 0,
                             clang::PartialTranslationUnit** PTU = nullptr,
-                            bool disableValuePrinting = false) {
+                            bool disableValuePrinting = false, void** modulePtr = nullptr) {
     auto PTUOrErr = Parse(input);
     if (!PTUOrErr) {
       llvm::logAllUnhandledErrors(PTUOrErr.takeError(), llvm::errs(),
@@ -290,11 +306,31 @@ public:
     if (PTU)
       *PTU = &*PTUOrErr;
 
+    std::cout << "Parsed PTU Module: " << (*PTUOrErr->TheModule).getName().data()<< "\n";
+    std::cout << "inline asm: " << (*PTUOrErr->TheModule).getModuleInlineAsm()<< "\n";
+    std::cout << "address: " << &(*PTUOrErr->TheModule)<< "\n";
+
+    // return the module address
+    if(modulePtr) {
+    *modulePtr = &(*PTUOrErr->TheModule);
+    m_Modules.push_back(*modulePtr);
+    std::cout << "moduleAddr1: " << *modulePtr<< "\n";
+    } else {
+      std::cout << "modulePtr is null\n";
+    }
     if (auto Err = Execute(*PTUOrErr)) {
       llvm::logAllUnhandledErrors(std::move(Err), llvm::errs(),
                                   "Failed to execute via ::process:");
       return Interpreter::kFailure;
     }
+
+    // loop over all our modules in m_Modules and print their addresses and names
+    // std::cout << "All module addresses:\n";
+    // for (auto mod : m_Modules) {
+    //   if(reinterpret_cast<llvm::Module*>(mod))
+    //     std::cout << "  moduleAddr: " << mod << " moduleName: " << ((llvm::Module*)mod)->getName().data() << "\n";
+    // }
+
     return Interpreter::kSuccess;
   }
 
