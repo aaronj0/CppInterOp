@@ -1240,6 +1240,17 @@ std::string GetFunctionSignature(TCppFunction_t func) {
   return Signature;
 }
 
+// std::sttring GetFunctionIRModule(TCppFunction_t func) {
+//   auto* D = (clang::Decl*)func;
+//   if (auto* FD = llvm::dyn_cast_or_null<FunctionDecl>(D)) {
+//     LOCK(getInterpInfo(FD));
+//     if (auto* M = FD->getParentModule())
+//       return (TCppScope_t)M->getTopLevelDecl();
+//   }
+
+//   return 0;
+// }
+
 // Internal functions that are not needed outside the library are
 // encompassed in an anonymous namespace as follows.
 namespace {
@@ -3799,9 +3810,24 @@ int Declare(compat::Interpreter& I, const char* code, bool silent) {
   return I.declare(code);
 }
 
+uintptr_t GetLatestModule() {
+  // return the top of m_Modules stack
+  auto* interp = static_cast<compat::Interpreter*>(GetInterpreter());
+  if (interp) {
+    auto M = interp->getLatestModule();
+    if (M) {
+      std::cout << "[GetLatestModule] Found latest" << reinterpret_cast<uintptr_t>(M) << " module: "
+                << M << "\n";
+      return reinterpret_cast<uintptr_t>(M);
+    }
+  }
+  return 0;
+}
+
 int Declare(const char* code, bool silent, TInterp_t I /*=nullptr*/) {
   auto* interp = static_cast<compat::Interpreter*>(I);
   LOCK(getInterpInfo(interp));
+  GetLatestModule();
   if (interp)
     return Declare(*interp, code, silent);
   return Declare(getInterp(NULLPTR), code, silent);

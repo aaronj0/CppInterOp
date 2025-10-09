@@ -778,6 +778,7 @@ CPPINTEROP_API void GetIncludePaths(std::vector<std::string>& IncludePaths,
                                     bool withFlags = false,
                                     TInterp_t I = nullptr);
 
+CPPINTEROP_API uintptr_t GetLatestModule();                    
 /// Only Declares a code snippet in \c code and does not execute it.
 ///\returns 0 on success
 CPPINTEROP_API int Declare(const char* code, bool silent = false,
