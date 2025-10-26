@@ -3258,7 +3258,8 @@ static std::string MakeResourcesPath() {
 } // namespace
 
 TInterp_t CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
-                            const std::vector<const char*>& GpuArgs /*={}*/) {
+                            const std::vector<const char*>& GpuArgs /*={}*/,
+                            TCppScope_t builder /*=nullptr*/) {
   std::string MainExecutableName = sys::fs::getMainExecutable(nullptr, nullptr);
   std::string ResourceDir = MakeResourcesPath();
   std::vector<const char*> ClingArgv = {"-resource-dir", ResourceDir.c_str(),

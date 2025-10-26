@@ -50,6 +50,7 @@ else()
     clangFrontend
     clangLex
     clangSema
+    LLVM
     )
 endif()
 
