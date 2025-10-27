@@ -3302,7 +3302,14 @@ TInterp_t CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
 #ifdef CPPINTEROP_USE_CLING
   auto I = new compat::Interpreter(ClingArgv.size(), &ClingArgv[0]);
 #else
-  auto Interp = compat::Interpreter::create(static_cast<int>(ClingArgv.size()),
+std::unique_ptr<Cpp::Interpreter> Interp;
+if(builder) {
+  std::cout<<"BUILDER IS NOT NULLPTR"<<std::endl; 
+  Interp = compat::Interpreter::create(static_cast<int>(ClingArgv.size()),
+                                            ClingArgv.data(), nullptr, {}, nullptr, true, static_cast<llvm::orc::LLJITBuilder*>(builder));
+
+                                            }                                            else
+  Interp = compat::Interpreter::create(static_cast<int>(ClingArgv.size()),
                                             ClingArgv.data());
   if (!Interp)
     return nullptr;

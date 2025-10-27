@@ -155,7 +155,7 @@ public:
   create(int argc, const char* const* argv, const char* llvmdir = nullptr,
          const std::vector<std::shared_ptr<clang::ModuleFileExtension>>&
              moduleExtensions = {},
-         void* extraLibHandle = nullptr, bool noRuntime = true) {
+         void* extraLibHandle = nullptr, bool noRuntime = true, llvm::orc::LLJITBuilder *jit = nullptr) {
     // Initialize all targets (required for device offloading)
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
@@ -164,7 +164,13 @@ public:
     llvm::InitializeAllAsmPrinters();
 
     std::vector<const char*> vargs(argv + 1, argv + argc);
-    auto CI = compat::createClangInterpreter(vargs);
+    std::unique_ptr<clang::Interpreter> CI;
+    if (jit) {
+      std::unique_ptr<llvm::orc::LLJITBuilder> builderPtr(jit);
+      CI = compat::createClangInterpreter(vargs, std::move(builderPtr));
+    }
+    else
+      CI = compat::createClangInterpreter(vargs);
     if (!CI) {
       llvm::errs() << "Interpreter creation failed\n";
       return nullptr;
@@ -284,9 +290,9 @@ public:
                             clang::PartialTranslationUnit** PTU = nullptr) {
     void* modulePtr = nullptr;
     CompilationResult res = process(input, /*Value=*/nullptr, PTU, false, &modulePtr);
-    if (modulePtr) {
-      std::cout << "Declared module address: " << modulePtr << "\n";
-    }
+    // if (modulePtr) {
+    //   std::cout << "Declared module address: " << modulePtr << "\n";
+    // }
     return res;
   }
 
@@ -306,18 +312,19 @@ public:
     if (PTU)
       *PTU = &*PTUOrErr;
 
-    std::cout << "Parsed PTU Module: " << (*PTUOrErr->TheModule).getName().data()<< "\n";
-    std::cout << "inline asm: " << (*PTUOrErr->TheModule).getModuleInlineAsm()<< "\n";
-    std::cout << "address: " << &(*PTUOrErr->TheModule)<< "\n";
+    // std::cout << "Parsed PTU Module: " << (*PTUOrErr->TheModule).getName().data()<< "\n";
+    // std::cout << "inline asm: " << (*PTUOrErr->TheModule).getModuleInlineAsm()<< "\n";
+    // std::cout << "address: " << &(*PTUOrErr->TheModule)<< "\n";
 
     // return the module address
     if(modulePtr) {
     *modulePtr = &(*PTUOrErr->TheModule);
     m_Modules.push_back(*modulePtr);
-    std::cout << "moduleAddr1: " << *modulePtr<< "\n";
-    } else {
-      std::cout << "modulePtr is null\n";
     }
+    // std::cout << "moduleAddr1: " << *modulePtr<< "\n";
+    // } else {
+    //   std::cout << "modulePtr is null\n";
+    // }
     if (auto Err = Execute(*PTUOrErr)) {
       llvm::logAllUnhandledErrors(std::move(Err), llvm::errs(),
                                   "Failed to execute via ::process:");

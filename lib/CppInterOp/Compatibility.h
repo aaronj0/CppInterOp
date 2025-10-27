@@ -205,7 +205,8 @@ inline void codeComplete(std::vector<std::string>& Results,
 namespace compat {
 
 inline std::unique_ptr<clang::Interpreter>
-createClangInterpreter(std::vector<const char*>& args) {
+createClangInterpreter(std::vector<const char*>& args, 
+                       std::unique_ptr<llvm::orc::LLJITBuilder> JITBuilder = nullptr) {
   auto has_arg = [](const char* x, llvm::StringRef match = "cuda") {
     llvm::StringRef Arg = x;
     Arg = Arg.trim().ltrim('-');
@@ -246,7 +247,7 @@ createClangInterpreter(std::vector<const char*>& args) {
   auto innerOrErr =
       CudaEnabled ? clang::Interpreter::createWithCUDA(std::move(*ciOrErr),
                                                        std::move(DeviceCI))
-                  : clang::Interpreter::create(std::move(*ciOrErr));
+                  : clang::Interpreter::create(std::move(*ciOrErr), std::move(JITBuilder));
 
   if (!innerOrErr) {
     llvm::logAllUnhandledErrors(innerOrErr.takeError(), llvm::errs(),

@@ -382,7 +382,7 @@ using GetOperatorArity = Cpp::OperatorArity (*)(Cpp::TCppFunction_t op);
 
 using GetOperator = void (*)(Cpp::TCppScope_t scope, Cpp::Operator op, std::vector<Cpp::TCppFunction_t>& operators, Cpp::OperatorArity kind);
 
-using CreateInterpreter = Cpp::TInterp_t (*)(const std::vector<const char*>& Args, const std::vector<const char*>& GpuArgs);
+using CreateInterpreter = Cpp::TInterp_t (*)(const std::vector<const char*>& Args, const std::vector<const char*>& GpuArgs, Cpp::TCppScope_t builder);
 
 using DeleteInterpreter = bool (*)(Cpp::TInterp_t interp);
 
