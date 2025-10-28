@@ -193,7 +193,7 @@ public:
     return inner->getCompilerInstance();
   }
 
-  llvm::orc::LLJIT* getExecutionEngine() const {
+  llvm::ExecutionEngine* getExecutionEngine() const {
     return compat::getExecutionEngine(*inner);
   }
 

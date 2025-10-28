@@ -69,6 +69,7 @@ static inline char* GetEnv(const char* Var_Name) {
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/Twine.h"
 #include "llvm/Config/llvm-config.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/JITSymbol.h"
 #include "llvm/ExecutionEngine/Orc/LLJIT.h"
 #include "llvm/Support/Casting.h"
@@ -296,10 +297,16 @@ inline void maybeMangleDeclName(const clang::GlobalDecl& GD,
 
 // Clang 18 - Add new Interpreter methods: CodeComplete
 
-inline llvm::orc::LLJIT* getExecutionEngine(clang::Interpreter& I) {
+// inline llvm::orc::LLJIT* getExecutionEngine(clang::Interpreter& I) {
+//   auto* engine = &llvm::cantFail(I.getExecutionEngine());
+//   return const_cast<llvm::orc::LLJIT*>(engine);
+// }
+
+inline llvm::ExecutionEngine* getExecutionEngine(clang::Interpreter& I) {
   auto* engine = &llvm::cantFail(I.getExecutionEngine());
-  return const_cast<llvm::orc::LLJIT*>(engine);
+  return const_cast<llvm::ExecutionEngine*>(engine);
 }
+
 
 inline llvm::Expected<llvm::JITTargetAddress>
 getSymbolAddress(clang::Interpreter& I, llvm::StringRef IRName) {

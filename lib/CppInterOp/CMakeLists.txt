@@ -51,7 +51,7 @@ else()
     clangLex
     clangSema
     # LLVMSupport
-    LLVM
+    # LLVM
     )
 endif()
 
