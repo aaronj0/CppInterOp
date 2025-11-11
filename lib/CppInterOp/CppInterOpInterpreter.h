@@ -32,6 +32,7 @@
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
 #include "llvm/ExecutionEngine/Orc/LLJIT.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Error.h"
@@ -155,7 +156,7 @@ public:
   create(int argc, const char* const* argv, const char* llvmdir = nullptr,
          const std::vector<std::shared_ptr<clang::ModuleFileExtension>>&
              moduleExtensions = {},
-         void* extraLibHandle = nullptr, bool noRuntime = true, llvm::orc::LLJITBuilder *jit = nullptr) {
+         void* extraLibHandle = nullptr, bool noRuntime = true, llvm::EngineBuilder *jit = nullptr) {
     // Initialize all targets (required for device offloading)
     llvm::InitializeAllTargetInfos();
     llvm::InitializeAllTargets();
@@ -166,7 +167,7 @@ public:
     std::vector<const char*> vargs(argv + 1, argv + argc);
     std::unique_ptr<clang::Interpreter> CI;
     if (jit) {
-      std::unique_ptr<llvm::orc::LLJITBuilder> builderPtr(jit);
+      std::unique_ptr<llvm::EngineBuilder> builderPtr(jit);
       CI = compat::createClangInterpreter(vargs, std::move(builderPtr));
     }
     else
@@ -284,6 +285,19 @@ public:
     if (m_Modules.size() > 0)
       return m_Modules.back();
     return nullptr;
+  }
+
+    void dumpModulesIR() const {
+    if (m_Modules.size() > 0)
+        // loop over all our modules in m_Modules and print their addresses and names
+    std::cout << "\n\n----------------CPPMODULE--------------------\n";
+    for (auto mod : m_Modules) {
+      if(reinterpret_cast<llvm::Module*>(mod)) {
+        std::cout << "  moduleAddr: " << mod << " moduleName: " << ((llvm::Module*)mod)->getName().data() << "\n";
+        std::cout << "  module IR:\n";
+        ((llvm::Module*)mod)->print(llvm::outs(), nullptr);
+      }
+    }
   }
 
   CompilationResult declare(const std::string& input,

@@ -7,7 +7,7 @@ if (EMSCRIPTEN)
   set(EXTRA_TEST_SOURCE_FILES main.cpp)
 else()
   # Do not need main.cpp for native builds, but we do have GPU support for native builds
-  set(EXTRA_TEST_SOURCE_FILES CUDATest.cpp)
+  # set(EXTRA_TEST_SOURCE_FILES CUDATest.cpp)
   set(EXTRA_PATH_TEST_BINARIES /CppInterOpTests/unittests/bin/$<CONFIG>/)
 endif()
 

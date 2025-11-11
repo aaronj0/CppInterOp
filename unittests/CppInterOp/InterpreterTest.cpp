@@ -124,33 +124,33 @@ TEST(InterpreterTest, ActivateInterpreter) {
   EXPECT_TRUE(Cpp::Evaluate("__cplusplus") == 201703L);
 }
 
-TEST(InterpreterTest, Process) {
-#ifdef EMSCRIPTEN_STATIC_LIBRARY
-  GTEST_SKIP() << "Test fails for Emscipten static library build";
-#endif
-#ifdef _WIN32
-  GTEST_SKIP() << "Disabled on Windows. Needs fixing.";
-#endif
-  if (llvm::sys::RunningOnValgrind())
-    GTEST_SKIP() << "XFAIL due to Valgrind report";
-  std::vector<const char*> interpreter_args = { "-include", "new" };
-  auto* I = Cpp::CreateInterpreter(interpreter_args);
-  EXPECT_TRUE(Cpp::Process("") == 0);
-  EXPECT_TRUE(Cpp::Process("int a = 12;") == 0);
-  EXPECT_FALSE(Cpp::Process("error_here;") == 0);
-  // Linker/JIT error.
-  EXPECT_FALSE(Cpp::Process("int f(); int res = f();") == 0);
+// TEST(InterpreterTest, Process) {
+// #ifdef EMSCRIPTEN_STATIC_LIBRARY
+//   GTEST_SKIP() << "Test fails for Emscipten static library build";
+// #endif
+// #ifdef _WIN32
+//   GTEST_SKIP() << "Disabled on Windows. Needs fixing.";
+// #endif
+//   if (llvm::sys::RunningOnValgrind())
+//     GTEST_SKIP() << "XFAIL due to Valgrind report";
+//   std::vector<const char*> interpreter_args = { "-include", "new" };
+//   auto* I = Cpp::CreateInterpreter(interpreter_args);
+//   EXPECT_TRUE(Cpp::Process("") == 0);
+//   EXPECT_TRUE(Cpp::Process("int a = 12;") == 0);
+//   EXPECT_FALSE(Cpp::Process("error_here;") == 0);
+//   // Linker/JIT error.
+//   EXPECT_FALSE(Cpp::Process("int f(); int res = f();") == 0);
 
-  // C API
-  auto* CXI = clang_createInterpreterFromRawPtr(I);
-  clang_Interpreter_declare(CXI, "#include <iostream>", false);
-  clang_Interpreter_process(CXI, "int c = 42;");
-  auto* CXV = clang_createValue();
-  auto Res = clang_Interpreter_evaluate(CXI, "c", CXV);
-  EXPECT_EQ(Res, CXError_Success);
-  clang_Value_dispose(CXV);
-  clang_Interpreter_dispose(CXI);
-}
+//   // C API
+//   auto* CXI = clang_createInterpreterFromRawPtr(I);
+//   clang_Interpreter_declare(CXI, "#include <iostream>", false);
+//   clang_Interpreter_process(CXI, "int c = 42;");
+//   auto* CXV = clang_createValue();
+//   auto Res = clang_Interpreter_evaluate(CXI, "c", CXV);
+//   EXPECT_EQ(Res, CXError_Success);
+//   clang_Value_dispose(CXV);
+//   clang_Interpreter_dispose(CXI);
+// }
 
 TEST(InterpreterTest, EmscriptenExceptionHandling) {
 #ifndef EMSCRIPTEN

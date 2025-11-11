@@ -57,6 +57,7 @@
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/Path.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
 
 #include <algorithm>
 #include <cassert>
@@ -3302,15 +3303,16 @@ TInterp_t CreateInterpreter(const std::vector<const char*>& Args /*={}*/,
 #ifdef CPPINTEROP_USE_CLING
   auto I = new compat::Interpreter(ClingArgv.size(), &ClingArgv[0]);
 #else
-std::unique_ptr<Cpp::Interpreter> Interp;
-if(builder) {
-  std::cout<<"BUILDER IS NOT NULLPTR"<<std::endl; 
-  Interp = compat::Interpreter::create(static_cast<int>(ClingArgv.size()),
-                                            ClingArgv.data(), nullptr, {}, nullptr, true, static_cast<llvm::orc::LLJITBuilder*>(builder));
+  std::unique_ptr<Cpp::Interpreter> Interp;
+  if(builder) {
+    std::cout<<"BUILDER IS NOT NULLPTR"<<std::endl; 
+    Interp = compat::Interpreter::create(static_cast<int>(ClingArgv.size()),
+                                              ClingArgv.data(), nullptr, {}, nullptr, true, static_cast<llvm::EngineBuilder*>(builder));
 
-                                            }                                            else
-  Interp = compat::Interpreter::create(static_cast<int>(ClingArgv.size()),
-                                            ClingArgv.data());
+    }
+  else
+    Interp = compat::Interpreter::create(static_cast<int>(ClingArgv.size()),
+                                              ClingArgv.data());
   if (!Interp)
     return nullptr;
   auto* I = Interp.release();
@@ -3574,11 +3576,12 @@ uintptr_t GetLatestModule() {
   auto* interp = static_cast<compat::Interpreter*>(GetInterpreter());
   if (interp) {
     auto M = interp->getLatestModule();
-    if (M) {
-      std::cout << "[GetLatestModule] Found latest" << reinterpret_cast<uintptr_t>(M) << " module: "
-                << M << "\n";
-      return reinterpret_cast<uintptr_t>(M);
-    }
+    // if (M) {
+    //   std::cout << "[GetLatestModule] Found latest" << reinterpret_cast<uintptr_t>(M) << " module: "
+    //             << M << "\n";
+    //   return reinterpret_cast<uintptr_t>(M);
+    // }
+    interp->dumpModulesIR();
   }
   return 0;
 }

@@ -202,12 +202,12 @@ inline void codeComplete(std::vector<std::string>& Results,
 #include "clang/Interpreter/Value.h"
 
 #include "llvm/Support/Error.h"
-
+#include <iostream>
 namespace compat {
 
 inline std::unique_ptr<clang::Interpreter>
 createClangInterpreter(std::vector<const char*>& args, 
-                       std::unique_ptr<llvm::orc::LLJITBuilder> JITBuilder = nullptr) {
+                       std::unique_ptr<llvm::EngineBuilder> JITBuilder = nullptr) {
   auto has_arg = [](const char* x, llvm::StringRef match = "cuda") {
     llvm::StringRef Arg = x;
     Arg = Arg.trim().ltrim('-');
@@ -220,7 +220,7 @@ createClangInterpreter(std::vector<const char*>& args,
 #else
   bool CudaEnabled = !gpu_args.empty();
 #endif
-
+std::cout<<"CudaEnabled: " << CudaEnabled << "\n";
   clang::IncrementalCompilerBuilder CB;
   CB.SetCompilerArgs({args.begin(), it});
 
