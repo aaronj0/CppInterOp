@@ -278,7 +278,7 @@ def GetNonReferenceType : CppInterOpAPI {
 
   let ReturnType = "TypeRef";
   let Args = [
-    Arg<"ConstTypeRef", "TyRef">
+    Arg<"TypeRef", "TyRef">
   ];
 }
 
@@ -421,6 +421,15 @@ def GetVariableType : CppInterOpAPI {
   let ReturnType = "TypeRef";
   let Args = [
     Arg<"ConstDeclRef", "var">
+  ];
+}
+
+def GetTemplatedDecl : CppInterOpAPI {
+  let Doc = "\\returns the templated decl for the given specialization.";
+
+  let ReturnType = "DeclRef";
+  let Args = [
+    Arg<"DeclRef", "DRef">
   ];
 }
 
@@ -1162,7 +1171,9 @@ def BestOverloadFunctionMatch : CppInterOpAPI {
   let Args = [
     Arg<"const std::vector<FuncRef>&", "candidates">,
     Arg<"const std::vector<TemplateArgInfo>&", "explicit_types">,
-    Arg<"const std::vector<TemplateArgInfo>&", "arg_types">
+    Arg<"const std::vector<TemplateArgInfo>&", "arg_types">,
+    Arg<"std::vector<FuncRef>&", "ambiguous_candidates">,
+    Arg<"bool", "is_operator", "false">
   ];
 }
 
@@ -1448,6 +1459,32 @@ def IsTemplateParmType : CppInterOpAPI {
   ];
 }
 
+def IsPackExpansionType : CppInterOpAPI {
+  let Doc = "Checks if the given type is a pack expansion type.";
+  let ReturnType = "bool";
+  let Args = [
+    Arg<"ConstTypeRef", "TyRef">
+  ];
+}
+
+def IsConversionOperator : CppInterOpAPI {
+  let Doc = "Checks if the provided parameter is a conversion operator.";
+  let ReturnType = "bool";
+  let Args = [Arg<"ConstFuncRef", "method">];
+}
+
+def IsEquivalentTypes : CppInterOpAPI {
+  let Doc = "Checks if the given two types are equivalent under qualifers, references & pointer transformations.";
+  let ReturnType = "bool";
+  let Args = [
+    Arg<"TypeRef", "typ1">,
+    Arg<"TypeRef", "typ2">,
+    Arg<"QualKind&", "qual">,
+    Arg<"ValueKind&", "ref">,
+    Arg<"bool&", "pointer">,
+  ];
+}
+
 def IsFunction : CppInterOpAPI {
   let Doc = "Checks if the scope is a function.";
   let ReturnType = "bool";
@@ -1462,6 +1499,12 @@ def IsFunctionPointerType : CppInterOpAPI {
 
 def IsMethod : CppInterOpAPI {
   let Doc = "Checks if the provided parameter is a method.";
+  let ReturnType = "bool";
+  let Args = [Arg<"ConstFuncRef", "method">];
+}
+
+def IsOperator : CppInterOpAPI {
+  let Doc = "Checks if the provided parameter is a operator.";
   let ReturnType = "bool";
   let Args = [Arg<"ConstFuncRef", "method">];
 }
