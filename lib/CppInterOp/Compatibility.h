@@ -347,10 +347,22 @@ inline void maybeMangleDeclName(const clang::GlobalDecl& GD,
 
 // Clang 18 - Add new Interpreter methods: CodeComplete
 
+#if CLANG_VERSION_MAJOR < 22
 inline llvm::orc::LLJIT* getExecutionEngine(clang::Interpreter& I) {
   auto* engine = &llvm::cantFail(I.getExecutionEngine());
   return const_cast<llvm::orc::LLJIT*>(engine);
 }
+#else
+inline llvm::orc::LLJIT* getExecutionEngine(clang::Interpreter& I) {
+  // In LLVM 22, getExecutionEngine() returns an IncrementalExecutor
+  // OrcIncrementalExecutor has teh LLJIT as its first data
+  // member
+  auto& Executor = llvm::cantFail(I.getExecutionEngine());
+  auto* Jit = *reinterpret_cast<llvm::orc::LLJIT**>(
+      reinterpret_cast<char*>(&Executor) + sizeof(void*));
+  return Jit;
+}
+#endif
 
 inline llvm::Expected<llvm::JITTargetAddress>
 getSymbolAddress(clang::Interpreter& I, llvm::StringRef IRName) {
