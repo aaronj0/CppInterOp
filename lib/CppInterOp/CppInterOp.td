@@ -64,7 +64,8 @@ def Declare : CppInterOpAPI {
   let ReturnType = "int";
   let Args = [
     Arg<"const char*", "code">,
-    Arg<"bool", "silent", "false">
+    Arg<"bool", "silent", "false">,
+    Arg<"TInterp_t", "I", "nullptr">
   ];
 }
 

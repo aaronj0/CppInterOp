@@ -4689,9 +4689,9 @@ int Declare(compat::Interpreter& I, const char* code, bool silent) {
   return result;
 }
 
-int Declare(const char* code, bool silent) {
-  INTEROP_TRACE(code, silent);
-  return INTEROP_RETURN(Declare(getInterp(), code, silent));
+int Declare(const char* code, bool silent, TInterp_t I) {
+  INTEROP_TRACE(code, silent, I);
+  return INTEROP_RETURN(Declare(getInterp(I), code, silent));
 }
 
 int Process(const char* code) {
