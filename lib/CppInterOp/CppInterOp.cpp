@@ -630,6 +630,18 @@ bool IsClass(TCppScope_t scope) {
   return INTEROP_RETURN(isa<CXXRecordDecl>(D));
 }
 
+bool IsCUDAFunction(TCppScope_t scope) {
+  INTEROP_TRACE(scope);
+  Decl* D = static_cast<Decl*>(scope);
+  if (auto* FD = llvm::dyn_cast<FunctionDecl>(D)) {
+    for (const auto& i : FD->attrs()) {
+      if (i->getKind() == clang::attr::Kind::CUDAGlobal)
+        return INTEROP_RETURN(true);
+    }
+  }
+  return INTEROP_RETURN(false);
+}
+
 bool IsFunction(TCppScope_t scope) {
   INTEROP_TRACE(scope);
   Decl* D = static_cast<Decl*>(scope);

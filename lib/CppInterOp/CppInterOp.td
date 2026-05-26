@@ -137,6 +137,13 @@ def IsClass : CppInterOpAPI {
   let Args = [Arg<"TCppScope_t", "scope">];
 }
 
+def IsCUDAFunction : CppInterOpAPI {
+  let Doc = "Checks if the scope is a CUDA function or not.";
+
+  let ReturnType = "bool";
+  let Args = [Arg<"TCppScope_t", "scope">];
+}
+
 def GetType : CppInterOpAPI {
   let Doc = [{Used to either get the built-in type of the provided string, or
 use the name to lookup the actual type. When `parent` is non-null, scoped
