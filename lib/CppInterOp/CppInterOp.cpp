@@ -5410,7 +5410,7 @@ FuncRef InstantiateTemplateFunctionFromString(const char* function_template) {
 
   // Try to force template instantiation and overload resolution.
   static unsigned long long var_count = 0;
-  std::string id = "__Cppyy_GetMethTmpl_" + std::to_string(var_count++);
+  std::string id = "__Cpp_GetMethTmpl_" + std::to_string(var_count++);
   std::string instance = "auto " + id + " = " + function_template + ";\n";
 
   if (!Cpp::Declare(instance.c_str(), /*silent=*/false)) {
