@@ -12,7 +12,7 @@
 // API — included only from lib/CppInterOp/*.cpp and unit-test TUs that need
 // to materialise typed pointers for testing the primitives themselves.
 //
-// Downstream consumers (cppyy, xeus-cpp) call the public C++ / C APIs and
+// Downstream consumers (cppjit, xeus-cpp) call the public C++ / C APIs and
 // never need wrap/unwrap; this header is deliberately not reachable from
 // include/CppInterOp/CppInterOp.h.
 //

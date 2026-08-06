@@ -95,7 +95,8 @@ namespace Cpp {
 
 class Box {
 public:
-  // `int` (not `unsigned char`) to work around compiler-research/cppyy#223.
+  // `int` (not `unsigned char`) to work around the archived python-binding
+  // fork's issue #223.
   enum Kind : int {
 #define X(type, name) K_##name,
     CPP_BOX_BUILTIN_TYPES

@@ -2543,7 +2543,7 @@ static VTableOverlay* applyVTableOverlay(void* inst, int total_method_slots,
 
 // Itanium emits the destructor pair (D1, D0) at slots 0 and 1; the
 // deleting-dtor (D0) at slot 1 is the path operator-delete takes for
-// heap-allocated objects -- the relevant hook for cppyy / binding proxies
+// heap-allocated objects -- the relevant hook for cppjit / binding proxies
 // whose Python wrapper drop triggers `delete cppobj`. MSVC emits a single
 // deleting dtor at slot 0.
 #ifdef _WIN32
@@ -5410,7 +5410,7 @@ FuncRef InstantiateTemplateFunctionFromString(const char* function_template) {
 
   // Try to force template instantiation and overload resolution.
   static unsigned long long var_count = 0;
-  std::string id = "__Cppyy_GetMethTmpl_" + std::to_string(var_count++);
+  std::string id = "__Cpp_GetMethTmpl_" + std::to_string(var_count++);
   std::string instance = "auto " + id + " = " + function_template + ";\n";
 
   if (!Cpp::Declare(instance.c_str(), /*silent=*/false)) {
@@ -5475,7 +5475,7 @@ void GetEnums(ConstDeclRef DRef, std::vector<std::string>& Result) {
   return INTEROP_VOID_RETURN();
 }
 
-// FIXME: On the CPyCppyy side the receiver is of TyRef
+// FIXME: On the PyCppJIT side the receiver is of TyRef
 //        vector<long int> instead of vector<size_t>
 std::vector<long int> GetDimensions(ConstTypeRef TyRef) {
   INTEROP_TRACE(TyRef);

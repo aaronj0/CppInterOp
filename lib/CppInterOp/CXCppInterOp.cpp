@@ -30,7 +30,7 @@ namespace Cpp {
 
 // Legacy C-ABI overload of Cpp::Evaluate. The Box-returning overload in
 // CppInterOp.cpp cannot cross the C boundary; bindings that go through
-// the generated cppinterop_Evaluate_intptr wrapper (e.g. cppyy) land
+// the generated cppinterop_Evaluate_intptr wrapper (e.g. cppjit) land
 // here instead.
 intptr_t Evaluate(const char* code, bool* HadError) {
   auto* I = unwrap<compat::Interpreter>(GetInterpreter());

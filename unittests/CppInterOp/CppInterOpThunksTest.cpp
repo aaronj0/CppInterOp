@@ -15,7 +15,7 @@
 namespace {
 
 // Tiny stand-in for the per-instance binding state. A real binding
-// (CPyCppyy's PyVirtualHandler) keeps a richer object here.
+// (PyCppJIT's PyVirtualHandler) keeps a richer object here.
 struct Handler {
   int Value;
 };

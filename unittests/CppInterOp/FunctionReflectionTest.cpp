@@ -2735,8 +2735,8 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, FunctionReflection_GetFunctionCallWrapper) {
 
 TYPED_TEST(CPPINTEROP_TEST_MODE,
            FunctionReflection_WrapAliasTemplateReturnType) {
-  // Regression test for cppyy issue
-  // https://github.com/compiler-research/cppyy/issues/218 (original reproducer:
+  // Regression test for the archived python-binding fork's issue #218
+  // (original reproducer:
   // `std::make_any<...>`, return type `std::enable_if_t<is_constructible_v<...>,
   // std::any>`). Building a wrapper for a function template whose return type is
   // a type-alias-template specialisation used to fail to compile; the snippet

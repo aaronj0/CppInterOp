@@ -113,7 +113,7 @@ TEST(HandleTypes, Hash) {
   EXPECT_FALSE(s.count(DeclRef{}));
 }
 
-// The dispatch ABI cppyy uses reinterpret-casts a dlsym'd void*-taking
+// The dispatch ABI cppjit uses reinterpret-casts a dlsym'd void*-taking
 // function pointer to a handle-taking one. Verify that the struct{void*}
 // calling convention is byte-identical to passing void*. A union swaps
 // the function-pointer type without triggering -Wcast-function-type.

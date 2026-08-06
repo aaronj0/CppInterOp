@@ -49,7 +49,7 @@ namespace Tracing {
 class TraceInfo;
 
 /// Process-global tracer pointer. Exported because TracingTests and
-/// the crash handler (linked-mode consumers) read it directly; cppyy
+/// the crash handler (linked-mode consumers) read it directly; cppjit
 /// and Dispatch.h consumers go through the DispatchRaw trace slots
 /// declared in CppInterOpTypes.h instead.
 extern CPPINTEROP_TRACE_API TraceInfo* TheTraceInfo;

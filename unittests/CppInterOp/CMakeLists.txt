@@ -140,11 +140,11 @@ if(CPPINTEROP_BUILT_STANDALONE AND NOT EMSCRIPTEN AND BUILD_SHARED_LIBS)
   add_dependencies(VTableOverlayCrossTUBench TestSharedLib)
 endif()
 
-# Downstream-DSO dlopen check that mirrors libcppyy-backend's contract:
+# Downstream-DSO dlopen check that mirrors the cppjit backend's contract:
 # a SHARED lib using <CppInterOp/Dispatch.h> without linking against
 # clangCppInterOp, dlopen'd by a standalone exec that also doesn't link.
 # Any inline-header UND ref that the host lib can't satisfy at runtime
-# trips here before the cppyy integration job.
+# trips here before the cppjit integration job.
 if(NOT EMSCRIPTEN AND BUILD_SHARED_LIBS)
   add_subdirectory(TestDownstreamLib)
 

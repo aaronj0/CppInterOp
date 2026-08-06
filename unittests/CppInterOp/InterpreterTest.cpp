@@ -270,7 +270,7 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, Interpreter_Evaluate_AllFundamentals) {
   EXPECT_EQ(c.convertTo<int>(), 'a');
 }
 
-// Regression (cppyy test12): no-Value-after-success used to abort in
+// Regression (cppjit test12): no-Value-after-success used to abort in
 // convertTo. A pure class decl is no-Value across all clang-repl
 // versions; `int x = 5;` is bound on newer ones.
 TYPED_TEST(CPPINTEROP_TEST_MODE, Interpreter_Evaluate_NonValueStatement) {

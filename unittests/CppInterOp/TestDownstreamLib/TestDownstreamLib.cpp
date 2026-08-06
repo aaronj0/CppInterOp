@@ -2,7 +2,7 @@
 
 #include "CppInterOp/Dispatch.h"
 
-// Per-DSO slot storage, mirroring cppyy-backend's cppinterop_dispatch.cxx.
+// Per-DSO slot storage, mirroring the cppjit backend's cppinterop_dispatch.cxx.
 namespace CppInternal {
 namespace DispatchRaw {
 #define CPPINTEROP_API_FUNC(DN, CN, Ret, DeclArgs, CallArgs, RawTypes)         \

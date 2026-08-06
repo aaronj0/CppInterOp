@@ -1327,10 +1327,10 @@ TYPED_TEST(CPPINTEROP_TEST_MODE,
            ScopeReflection_GetClassTemplateInstantiationArgs) {
   std::vector<Decl *> Decls;
   std::string code = R"(
-    template<typename ...T> struct __Cppyy_AppendTypesSlow {};
-    __Cppyy_AppendTypesSlow<int, float, double> v1;
-    __Cppyy_AppendTypesSlow<int> v2;
-    __Cppyy_AppendTypesSlow<> v3;
+    template<typename ...T> struct __Cpp_AppendTypesSlow {};
+    __Cpp_AppendTypesSlow<int, float, double> v1;
+    __Cpp_AppendTypesSlow<int> v2;
+    __Cpp_AppendTypesSlow<> v3;
   )";
 
   GetAllTopLevelDecls(code, Decls);
