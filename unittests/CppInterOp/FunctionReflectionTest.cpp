@@ -56,6 +56,17 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, FunctionReflection_GetClassMethods) {
         using B::B;
     };
     using MyInt = int;
+
+    class B2 {
+    public:
+        B2(int n = 0) : b2{n} {}
+        int b2;
+    };
+
+    class C2: public B2 {
+    public:
+        using B2::B2;
+    };
     )";
 
   GetAllTopLevelDecls(code, Decls);
@@ -103,7 +114,11 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, FunctionReflection_GetClassMethods) {
   std::vector<Cpp::FuncRef> methods3;
   Cpp::GetClassMethods(Decls[4], methods3);
 
-  EXPECT_EQ(methods3.size(), 9);
+  // the parameterless default/copy/move constructors of B, though nominally
+  // inherited by the using declaration, are not exposed: C's own special
+  // members are authoritative (and the call layer refuses to invoke special
+  // members injected by a using declaration)
+  EXPECT_EQ(methods3.size(), 7);
   EXPECT_EQ(get_method_name(methods3[0]), "inline C::C()");
   EXPECT_EQ(get_method_name(methods3[1]), "inline constexpr C::C(const C &)");
   EXPECT_EQ(get_method_name(methods3[2]), "inline constexpr C::C(C &&)");
@@ -111,7 +126,21 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, FunctionReflection_GetClassMethods) {
   EXPECT_EQ(get_method_name(methods3[4]), "inline C &C::operator=(C &&)");
   EXPECT_EQ(get_method_name(methods3[5]), "inline C::~C()");
   EXPECT_EQ(get_method_name(methods3[6]), "inline C::B(int)");
-  EXPECT_EQ(get_method_name(methods3[7]), "inline constexpr C::B(const B &)");
+  for (auto& m : methods3) {
+    EXPECT_NE(get_method_name(m), "inline constexpr C::B(const B &)");
+    EXPECT_NE(get_method_name(m), "inline constexpr C::B(B &&)");
+  }
+
+  // A constructor whose every parameter has a default, e.g. B2(int n = 0),
+  // is not the base's parameterless default constructor: it is genuinely
+  // inherited and stays exposed.
+  std::vector<Cpp::FuncRef> methods_c2;
+  Cpp::GetClassMethods(Cpp::GetNamed("C2"), methods_c2);
+  bool has_inherited_default_arg_ctor = false;
+  for (auto& m : methods_c2)
+    if (get_method_name(m) == "inline C2::B2(int)")
+      has_inherited_default_arg_ctor = true;
+  EXPECT_TRUE(has_inherited_default_arg_ctor);
 
   // Should not crash.
   std::vector<Cpp::FuncRef> methods4;
