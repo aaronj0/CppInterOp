@@ -137,6 +137,13 @@ def IsClass : CppInterOpAPI {
   let Args = [Arg<"ConstDeclRef", "DRef">];
 }
 
+def IsCUDAFunction : CppInterOpAPI {
+  let Doc = "Checks if the declaration is a CUDA __global__ kernel.";
+
+  let ReturnType = "bool";
+  let Args = [Arg<"ConstDeclRef", "DRef">];
+}
+
 def GetType : CppInterOpAPI {
   let Doc = [{Used to either get the built-in type of the provided string, or
 use the name to lookup the actual type. When `parent` is non-null, scoped

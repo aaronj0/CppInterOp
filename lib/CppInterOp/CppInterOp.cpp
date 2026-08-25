@@ -695,6 +695,14 @@ bool IsClass(ConstDeclRef DRef) {
   return INTEROP_RETURN(isa<CXXRecordDecl>(D));
 }
 
+bool IsCUDAFunction(ConstDeclRef DRef) {
+  INTEROP_TRACE(DRef);
+  const auto* D = unwrap<Decl>(DRef);
+  if (const auto* FD = dyn_cast<FunctionDecl>(D))
+    return INTEROP_RETURN(FD->hasAttr<CUDAGlobalAttr>());
+  return INTEROP_RETURN(false);
+}
+
 bool IsFunction(ConstDeclRef DRef) {
   INTEROP_TRACE(DRef);
   const auto* D = unwrap<Decl>(DRef);
