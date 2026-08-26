@@ -325,6 +325,11 @@ private:
   mutable std::unique_ptr<DynamicLibraryManager> sDLM;
   mutable std::once_flag sDLMInit;
   bool outOfProcess;
+  // CUDA mode only: the device-side CompilerInstance, owned by `inner`.
+  // clang::Interpreter exposes no handle to it, but post-creation state
+  // changes (header search) must reach the device side too, since every
+  // input is parsed there first.
+  clang::CompilerInstance* deviceCI = nullptr;
 
 #if CLANG_VERSION_MAJOR < 24
   // Weak thread_local definitions already handed to the JIT, so later modules
@@ -334,8 +339,10 @@ private:
 
 public:
   Interpreter(std::unique_ptr<clang::Interpreter> CI,
-              std::unique_ptr<IOContext> ctx = nullptr, bool oop = false)
-      : inner(std::move(CI)), io_context(std::move(ctx)), outOfProcess(oop) {}
+              std::unique_ptr<IOContext> ctx = nullptr, bool oop = false,
+              clang::CompilerInstance* deviceCI = nullptr)
+      : inner(std::move(CI)), io_context(std::move(ctx)), outOfProcess(oop),
+        deviceCI(deviceCI) {}
 
 public:
   static std::unique_ptr<Interpreter>
@@ -370,8 +377,9 @@ public:
 
     // Currently, we can't pass IOContext in `createClangInterpreter`, that's
     // why fd's are passed. This should be refactored later.
-    auto CI =
-        compat::createClangInterpreter(vargs, stdin_fd, stdout_fd, stderr_fd);
+    clang::CompilerInstance* deviceCI = nullptr;
+    auto CI = compat::createClangInterpreter(vargs, stdin_fd, stdout_fd,
+                                             stderr_fd, &deviceCI);
     if (!CI) {
       llvm::errs() << "Interpreter creation failed\n";
       return nullptr;
@@ -394,7 +402,7 @@ public:
 #endif
 
     return std::make_unique<Interpreter>(std::move(CI), std::move(io_ctx),
-                                         outOfProcess);
+                                         outOfProcess, deviceCI);
   }
 
   ~Interpreter() {
@@ -656,7 +664,18 @@ public:
   ///\param[in] Delim - Delimiter to separate paths or NULL if a single path
   ///
   void AddIncludePaths(llvm::StringRef PathsStr, const char* Delim = ":") {
-    const clang::CompilerInstance* CI = getCompilerInstance();
+    AddIncludePathsToCI(PathsStr, getCompilerInstance(), Delim);
+    // In CUDA mode every input is parsed by the device-side compiler
+    // instance first, and it resolves headers through its own
+    // HeaderSearch.
+    if (deviceCI)
+      AddIncludePathsToCI(PathsStr, deviceCI, Delim);
+  }
+
+private:
+  static void AddIncludePathsToCI(llvm::StringRef PathsStr,
+                                  const clang::CompilerInstance* CI,
+                                  const char* Delim) {
     clang::HeaderSearchOptions& HOpts =
         const_cast<clang::HeaderSearchOptions&>(CI->getHeaderSearchOpts());
 
@@ -680,6 +699,7 @@ public:
     }
   }
 
+public:
   ///\brief Adds a single include path (-I).
   ///
   void AddIncludePath(llvm::StringRef PathsStr) {
