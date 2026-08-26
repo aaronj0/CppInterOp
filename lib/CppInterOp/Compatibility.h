@@ -424,9 +424,17 @@ inline bool configureBundledOOPRuntime(clang::IncrementalExecutorBuilder& B) {
 }
 #endif // LLVM_VERSION_MAJOR > 21
 
+/// \param[out] DeviceCIOut when non-null, receives the device-side
+/// CompilerInstance in CUDA mode (nullptr otherwise). The instance is
+/// owned by the returned clang::Interpreter, which keeps no public
+/// handle to it; callers that must mutate device-side state after
+/// creation (e.g. header search) need this pointer.
 inline std::unique_ptr<clang::Interpreter>
 createClangInterpreter(std::vector<const char*>& args, int stdin_fd = -1,
-                       int stdout_fd = -1, int stderr_fd = -1) {
+                       int stdout_fd = -1, int stderr_fd = -1,
+                       clang::CompilerInstance** DeviceCIOut = nullptr) {
+  if (DeviceCIOut)
+    *DeviceCIOut = nullptr;
   bool CudaEnabled = false;
   std::string OffloadArch;
   std::string CudaPath;
@@ -507,6 +515,9 @@ createClangInterpreter(std::vector<const char*>& args, int stdin_fd = -1,
   (*ciOrErr)->LoadRequestedPlugins();
   if (CudaEnabled)
     DeviceCI->LoadRequestedPlugins();
+  // createWithCUDA takes ownership of DeviceCI below; keep the raw
+  // pointer so it can be handed out once creation succeeds.
+  clang::CompilerInstance* DeviceCIPtr = DeviceCI.get();
 
 #if LLVM_VERSION_MAJOR > 21 && !defined(_WIN32)
   if (outOfProcess) {
@@ -541,6 +552,8 @@ createClangInterpreter(std::vector<const char*>& args, int stdin_fd = -1,
                                 "Failed to build Interpreter:");
     return nullptr;
   }
+  if (DeviceCIOut)
+    *DeviceCIOut = DeviceCIPtr;
   if (CudaEnabled) {
     if (auto Err = (*innerOrErr)->LoadDynamicLibrary("libcudart.so")) {
       llvm::logAllUnhandledErrors(std::move(Err), llvm::errs(),
