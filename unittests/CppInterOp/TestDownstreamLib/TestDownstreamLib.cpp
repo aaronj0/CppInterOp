@@ -20,6 +20,17 @@ void downstream_link_probe(Cpp::JitCall* JC) {
   JC->InvokeDestructor(nullptr);
 }
 
+// ODR-uses the Error.h inline surface. Result<void>::share, CapturedError
+// and the ErrorRef / DiagnosticRef forwarders must resolve to dispatch
+// slots only. An out-of-line library symbol left behind any of them is
+// an UND reference that dlopen(RTLD_NOW) of this lib cannot satisfy.
+void downstream_error_probe(Cpp::Result<void>* R) {
+  Cpp::CapturedError C = R->share();
+  for (Cpp::DiagnosticRef D : Cpp::GetDiagnostics(C.ref()))
+    (void)D.message();
+  (void)C.record();
+}
+
 int downstream_verify_trace_slots(const char* libpath) {
   if (!Cpp::LoadDispatchAPI(libpath))
     return 1;

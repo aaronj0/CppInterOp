@@ -19,9 +19,10 @@
 #endif
 
 #include "CppInterOp/CppInterOpTypes.h"
-// Cpp::Box must be visible before the tablegen-generated declarations
-// below, since Evaluate (and future Value-returning APIs) reference it.
+// Cpp::Box and the Error.h types must be visible before the
+// tablegen-generated declarations below, which reference them.
 #include "CppInterOp/Box.h"
+#include "CppInterOp/Error.h"
 
 #include <initializer_list>
 #include <memory>

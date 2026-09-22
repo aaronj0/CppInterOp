@@ -1576,6 +1576,15 @@ TEST(TracingCoverageTest, AllPublicAPIsAreTraced) {
   ApiNames.erase("CppInterOpTraceJitCallInvokeImpl");
   ApiNames.erase("CppInterOpTraceJitCallInvokeDestructorImpl");
   ApiNames.erase("CppInterOpTraceJitCallInvokeReturnImpl");
+  // Exclude the Error.h accessor and refcount surface. Result<T>'s
+  // inline bodies call these to read a returned error, so a trace entry
+  // would log a non-replayable handle read inside every failing call.
+  for (const char* Name :
+       {"GetStatus", "GetDiagnostics", "GetProducer", "GetProducerSignature",
+        "RetainErrorRef", "ReleaseErrorRef", "GetDiagnosticSeverity",
+        "GetDiagnosticMessage", "GetDiagnosticFile", "GetDiagnosticLine",
+        "GetDiagnosticColumn"})
+    ApiNames.erase(Name);
 
   ASSERT_GT(ApiNames.size(), 100u)
       << "Suspiciously few API functions found — regex may be broken";

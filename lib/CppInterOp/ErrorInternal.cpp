@@ -63,17 +63,6 @@ CPPINTEROP_API unsigned GetDiagnosticColumn(DiagnosticRef D) {
   return 0;
 }
 
-// Member-function forwarders.
-DiagnosticSeverity DiagnosticRef::severity() const {
-  return GetDiagnosticSeverity(*this);
-}
-const char* DiagnosticRef::message() const {
-  return GetDiagnosticMessage(*this);
-}
-const char* DiagnosticRef::file() const { return GetDiagnosticFile(*this); }
-unsigned DiagnosticRef::line() const { return GetDiagnosticLine(*this); }
-unsigned DiagnosticRef::column() const { return GetDiagnosticColumn(*this); }
-
 CPPINTEROP_API Status GetStatus(ErrorRef E) {
   if (E.isOk())
     return Status::Ok;
@@ -101,39 +90,14 @@ CPPINTEROP_API ArrayView<DiagnosticRef> GetDiagnostics(ErrorRef E) {
   return ArrayView<DiagnosticRef>{Buf.data(), Buf.size()};
 }
 
-// Member-function forwarders.
-Status ErrorRef::status() const { return GetStatus(*this); }
-ArrayView<DiagnosticRef> ErrorRef::diagnostics() const {
-  return GetDiagnostics(*this);
-}
-const char* ErrorRef::producer() const {
-  const ErrorSlice* S = slice();
+CPPINTEROP_API const char* GetProducer(ErrorRef E) {
+  const ErrorSlice* S = E.slice();
   return S ? S->Producer : nullptr;
 }
-const char* ErrorRef::producerSignature() const {
-  const ErrorSlice* S = slice();
-  return S ? S->ProducerSignature : nullptr;
-}
 
-ErrorRecord ErrorRef::record() const {
-  ErrorRecord R;
-  R.Code = status();
-  const ErrorSlice* S = slice();
-  if (!S)
-    return R;
-  R.Diagnostics.reserve(S->Diagnostics.size());
-  for (const StoredDiagView& Dv : S->Diagnostics) {
-    DiagnosticInfo Di;
-    Di.Severity = Dv.Sev;
-    Di.Message = Dv.Message;
-    Di.File = Dv.File;
-    Di.Line = Dv.Line;
-    Di.Column = Dv.Column;
-    R.Diagnostics.push_back(std::move(Di));
-  }
-  R.Producer = S->Producer;
-  R.ProducerSignature = S->ProducerSignature;
-  return R;
+CPPINTEROP_API const char* GetProducerSignature(ErrorRef E) {
+  const ErrorSlice* S = E.slice();
+  return S ? S->ProducerSignature : nullptr;
 }
 
 CPPINTEROP_API void RetainErrorRef(ErrorRef E) {

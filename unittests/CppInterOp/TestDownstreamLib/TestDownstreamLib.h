@@ -5,13 +5,19 @@
 // so the optimizer can't DCE the inlined references at any -O level.
 namespace Cpp {
 class JitCall;
-}
+template <typename T> class Result;
+} // namespace Cpp
 #ifdef _WIN32
 #define TESTDOWNSTREAM_EXPORT extern "C" __declspec(dllexport)
 #else
 #define TESTDOWNSTREAM_EXPORT extern "C" __attribute__((visibility("default")))
 #endif
 TESTDOWNSTREAM_EXPORT void downstream_link_probe(Cpp::JitCall* JC);
+
+/// Probe entry that ODR-uses the Error.h inline surface: Result<void>,
+/// CapturedError and the ErrorRef / DiagnosticRef member forwarders. R
+/// is opaque for the same reason JC is above.
+TESTDOWNSTREAM_EXPORT void downstream_error_probe(Cpp::Result<void>* R);
 
 /// After LoadDispatchAPI(libpath) succeeds, check every DispatchRaw
 /// trace slot in this DSO is non-null. Returns 0 on success, a

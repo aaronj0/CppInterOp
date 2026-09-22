@@ -1676,6 +1676,98 @@ def IsVoidPointerType : CppInterOpAPI {
   let Args = [Arg<"ConstTypeRef", "TyRef">];
 }
 
+// --- Result<T> error and diagnostic accessors ---
+//
+// The free-function surface behind include/CppInterOp/Error.h. Result<T>,
+// CapturedError, ErrorRef and DiagnosticRef are header-only and call
+// these, so a Dispatch.h consumer needs them in the table to use a
+// Result<T> at all. ErrorRef and DiagnosticRef cross no C boundary.
+
+def GetStatus : CppInterOpAPI {
+  let Doc = [{\returns the Status carried by \c E: Status::Ok for the null
+encoding, the packed code for an inline error, the slice's code otherwise.}];
+  let NoCWrapper = true;
+  let ReturnType = "Status";
+  let Args = [Arg<"ErrorRef", "E">];
+}
+
+def GetDiagnostics : CppInterOpAPI {
+  let Doc = [{\returns a view over the Clang diagnostics drained into \c E.
+Empty for Ok and inline errors. The view aliases a per-thread buffer that
+the next GetDiagnostics call on the same thread overwrites.}];
+  let NoCWrapper = true;
+  let ReturnType = "ArrayView<DiagnosticRef>";
+  let Args = [Arg<"ErrorRef", "E">];
+}
+
+def GetProducer : CppInterOpAPI {
+  let Doc = [{\returns the __func__ of the API call that produced \c E, or
+nullptr for Ok and inline errors.}];
+  let NoCWrapper = true;
+  let ReturnType = "const char*";
+  let Args = [Arg<"ErrorRef", "E">];
+}
+
+def GetProducerSignature : CppInterOpAPI {
+  let Doc = [{\returns the __PRETTY_FUNCTION__ (__FUNCSIG__ on MSVC) of the
+API call that produced \c E, or nullptr for Ok and inline errors.}];
+  let NoCWrapper = true;
+  let ReturnType = "const char*";
+  let Args = [Arg<"ErrorRef", "E">];
+}
+
+def RetainErrorRef : CppInterOpAPI {
+  let Doc = [{Adds one reference to the slice behind \c E. No-op for Ok and
+inline encodings. Result<T> and CapturedError call this when they copy an
+error.}];
+  let NoCWrapper = true;
+  let ReturnType = "void";
+  let Args = [Arg<"ErrorRef", "E">];
+}
+
+def ReleaseErrorRef : CppInterOpAPI {
+  let Doc = [{Drops one reference to the slice behind \c E and frees it when
+the count reaches zero. No-op for Ok and inline encodings.}];
+  let NoCWrapper = true;
+  let ReturnType = "void";
+  let Args = [Arg<"ErrorRef", "E">];
+}
+
+def GetDiagnosticSeverity : CppInterOpAPI {
+  let Doc = [{\returns the severity of \c D. Severity::Note for a null ref.}];
+  let NoCWrapper = true;
+  let ReturnType = "DiagnosticSeverity";
+  let Args = [Arg<"DiagnosticRef", "D">];
+}
+
+def GetDiagnosticMessage : CppInterOpAPI {
+  let Doc = [{\returns the formatted message of \c D. "" for a null ref.}];
+  let NoCWrapper = true;
+  let ReturnType = "const char*";
+  let Args = [Arg<"DiagnosticRef", "D">];
+}
+
+def GetDiagnosticFile : CppInterOpAPI {
+  let Doc = [{\returns the presumed file name of \c D. "" when unknown.}];
+  let NoCWrapper = true;
+  let ReturnType = "const char*";
+  let Args = [Arg<"DiagnosticRef", "D">];
+}
+
+def GetDiagnosticLine : CppInterOpAPI {
+  let Doc = [{\returns the 1-based line of \c D. 0 when unknown.}];
+  let NoCWrapper = true;
+  let ReturnType = "unsigned";
+  let Args = [Arg<"DiagnosticRef", "D">];
+}
+
+def GetDiagnosticColumn : CppInterOpAPI {
+  let Doc = [{\returns the 1-based column of \c D. 0 when unknown.}];
+  let NoCWrapper = true;
+  let ReturnType = "unsigned";
+  let Args = [Arg<"DiagnosticRef", "D">];
+}
+
 // Trace-hook impls invoked by JitCall's inline fast path through
 // ::CppInternal::DispatchRaw slots. Routing through the X-macro means
 // Dispatch.h consumers pick up the slots via LoadDispatchAPI without

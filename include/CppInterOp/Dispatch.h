@@ -34,6 +34,7 @@
 
 #include "CppInterOp/Box.h"
 #include "CppInterOp/CppInterOpTypes.h"
+#include "CppInterOp/Error.h"
 
 #include <cstdlib>
 #include <iostream>

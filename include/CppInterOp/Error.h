@@ -65,22 +65,39 @@ struct DiagnosticRef {
 
   [[nodiscard]] bool isNull() const { return data == nullptr; }
 
-  // Member-function surface (forwarders defined in ErrorInternal.cpp).
-  CPPINTEROP_API DiagnosticSeverity severity() const;
-  CPPINTEROP_API const char* message() const;
-  CPPINTEROP_API const char* file() const;
-  CPPINTEROP_API unsigned line() const;
-  CPPINTEROP_API unsigned column() const;
+  // Member-function surface. Inline forwarders to the accessors below.
+  [[nodiscard]] DiagnosticSeverity severity() const;
+  [[nodiscard]] const char* message() const;
+  [[nodiscard]] const char* file() const;
+  [[nodiscard]] unsigned line() const;
+  [[nodiscard]] unsigned column() const;
 };
 
-/// Field accessors. The TableGen binding surface; member functions
-/// above forward here. Safe to call on a null DiagnosticRef: empty
-/// strings, zero positions, Severity::Note.
+/// Field accessors. CppInterOp.td owns these entries. The generated
+/// CppInterOpDecl.inc (CppInterOp.h) re-declares them and the generated
+/// CppInterOpAPI.inc (Dispatch.h) defines them as dispatch wrappers.
+/// They are declared here as well so the inline bodies in this header
+/// can call them. Safe to call on a null DiagnosticRef: empty strings,
+/// zero positions, Severity::Note.
 CPPINTEROP_API DiagnosticSeverity GetDiagnosticSeverity(DiagnosticRef D);
 CPPINTEROP_API const char* GetDiagnosticMessage(DiagnosticRef D);
 CPPINTEROP_API const char* GetDiagnosticFile(DiagnosticRef D);
 CPPINTEROP_API unsigned GetDiagnosticLine(DiagnosticRef D);
 CPPINTEROP_API unsigned GetDiagnosticColumn(DiagnosticRef D);
+
+inline DiagnosticSeverity DiagnosticRef::severity() const {
+  return GetDiagnosticSeverity(*this);
+}
+inline const char* DiagnosticRef::message() const {
+  return GetDiagnosticMessage(*this);
+}
+inline const char* DiagnosticRef::file() const {
+  return GetDiagnosticFile(*this);
+}
+inline unsigned DiagnosticRef::line() const { return GetDiagnosticLine(*this); }
+inline unsigned DiagnosticRef::column() const {
+  return GetDiagnosticColumn(*this);
+}
 
 //
 // Encoding (8 bytes, single uintptr_t):
@@ -122,23 +139,37 @@ struct ErrorRef {
     return isSlice() ? reinterpret_cast<const ErrorSlice*>(bits) : nullptr;
   }
 
-  // Member-function surface (defined in Error.cpp).
-  CPPINTEROP_API Status status() const;
-  CPPINTEROP_API ArrayView<DiagnosticRef> diagnostics() const;
-  CPPINTEROP_API const char* producer() const;
-  CPPINTEROP_API const char* producerSignature() const;
-  CPPINTEROP_API class ErrorRecord record() const;
+  // Member-function surface. Inline forwarders to the accessors below.
+  [[nodiscard]] Status status() const;
+  [[nodiscard]] ArrayView<DiagnosticRef> diagnostics() const;
+  [[nodiscard]] const char* producer() const;
+  [[nodiscard]] const char* producerSignature() const;
+  [[nodiscard]] class ErrorRecord record() const;
 };
 
-/// Free-function aliases over the ErrorRef accessors. The TableGen
-/// binding surface; the member functions above forward here.
+/// Free-function accessors over ErrorRef. Owned by CppInterOp.td and
+/// re-declared by the generated .inc files, like the DiagnosticRef
+/// accessors above. GetProducer and GetProducerSignature return the
+/// __func__ and __PRETTY_FUNCTION__ of the API call that produced a
+/// slice error, and nullptr for Ok and inline encodings.
 CPPINTEROP_API Status GetStatus(ErrorRef E);
 CPPINTEROP_API ArrayView<DiagnosticRef> GetDiagnostics(ErrorRef E);
+CPPINTEROP_API const char* GetProducer(ErrorRef E);
+CPPINTEROP_API const char* GetProducerSignature(ErrorRef E);
 
 /// Refcount hooks. Result<T> calls these around copy/move/dtor; they
 /// are no-ops on Ok and inline encodings.
 CPPINTEROP_API void RetainErrorRef(ErrorRef E);
 CPPINTEROP_API void ReleaseErrorRef(ErrorRef E);
+
+inline Status ErrorRef::status() const { return GetStatus(*this); }
+inline ArrayView<DiagnosticRef> ErrorRef::diagnostics() const {
+  return GetDiagnostics(*this);
+}
+inline const char* ErrorRef::producer() const { return GetProducer(*this); }
+inline const char* ErrorRef::producerSignature() const {
+  return GetProducerSignature(*this);
+}
 
 //
 // Deep-copy snapshot for callers that want a plain value-type and do
@@ -162,6 +193,25 @@ public:
   const char* Producer = nullptr;
   const char* ProducerSignature = nullptr;
 };
+
+inline ErrorRecord ErrorRef::record() const {
+  ErrorRecord R;
+  R.Code = status();
+  ArrayView<DiagnosticRef> Diags = diagnostics();
+  R.Diagnostics.reserve(Diags.size());
+  for (DiagnosticRef D : Diags) {
+    DiagnosticInfo Di;
+    Di.Severity = D.severity();
+    Di.Message = D.message();
+    Di.File = D.file();
+    Di.Line = D.line();
+    Di.Column = D.column();
+    R.Diagnostics.push_back(std::move(Di));
+  }
+  R.Producer = producer();
+  R.ProducerSignature = producerSignature();
+  return R;
+}
 
 //
 // Extends a slice's lifetime past the originating Result<T> via one
