@@ -22,8 +22,6 @@
 #include "llvm/ADT/SmallString.h"
 #include "llvm/Support/raw_ostream.h"
 
-#include <cstdio>
-#include <cstdlib>
 #include <memory>
 #include <utility>
 
@@ -345,25 +343,5 @@ CPPINTEROP_API DiagnosticRef GetPendingDiagnostic(unsigned Idx, InterpRef I) {
 CPPINTEROP_API void ClearPendingDiagnostics(InterpRef I) {
   GetInterpInfo(I)->StoredDiags.clear();
 }
-
-[[noreturn]] CPPINTEROP_API void
-ResultAbort_ValueOnError(const ErrorRef& /*Err*/) {
-  std::fputs("Cpp::Result<T>::value() called on an error-bearing "
-             "Result. Use value_or(fallback) for lenient semantics, "
-             "or branch on .ok() / .error() before calling .value().\n",
-             stderr);
-  std::abort();
-}
-
-#ifndef NDEBUG
-[[noreturn]] CPPINTEROP_API void
-ResultAbort_UncheckedOnDtor(const ErrorRef& /*Err*/) {
-  std::fputs("Cpp::Result destroyed without check (likely a dropped "
-             "error). Call .ok() / .error() / .value() to inspect, "
-             "or .ignore() to acknowledge.\n",
-             stderr);
-  std::abort();
-}
-#endif
 
 } // namespace Cpp

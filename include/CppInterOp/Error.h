@@ -22,6 +22,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <new>
 #include <string>
 #include <type_traits>
@@ -210,11 +212,26 @@ public:
   [[nodiscard]] ErrorRecord record() const { return Ref.record(); }
 };
 
-[[noreturn]] CPPINTEROP_API void ResultAbort_ValueOnError(const ErrorRef& Err);
+// Header-only so a Result<T> instantiated in a consumer needs no
+// library symbol for its abort paths. Keeps a consumer built without
+// NDEBUG linking against a Release library, where the debug-only
+// helper would otherwise be an unresolved reference.
+[[noreturn]] inline void ResultAbort_ValueOnError(const ErrorRef& /*Err*/) {
+  std::fputs("Cpp::Result<T>::value() called on an error-bearing "
+             "Result. Use value_or(fallback) for lenient semantics, "
+             "or branch on .ok() / .error() before calling .value().\n",
+             stderr);
+  std::abort();
+}
 
 #ifndef NDEBUG
-[[noreturn]] CPPINTEROP_API void
-ResultAbort_UncheckedOnDtor(const ErrorRef& Err);
+[[noreturn]] inline void ResultAbort_UncheckedOnDtor(const ErrorRef& /*Err*/) {
+  std::fputs("Cpp::Result destroyed without check (likely a dropped "
+             "error). Call .ok() / .error() / .value() to inspect, "
+             "or .ignore() to acknowledge.\n",
+             stderr);
+  std::abort();
+}
 #endif
 
 template <typename T> class [[nodiscard]] Result {
