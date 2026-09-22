@@ -155,3 +155,39 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, Consumer_SilentSuppressesCapture) {
   EXPECT_NE(0, Cpp::Declare("int err = ;", /*silent=*/true));
   EXPECT_EQ(Cpp::GetPendingDiagnosticCount(), 0U);
 }
+
+// TryDeclare's silent=true only turns off the forward to the chained
+// printer. The consumer still captures, and the captured diagnostics
+// move into the returned error's slice.
+TYPED_TEST(CPPINTEROP_TEST_MODE, Consumer_SilentTryDeclareStillCaptures) {
+  TestFixture::CreateInterpreter();
+  Cpp::ClearPendingDiagnostics();
+  testing::internal::CaptureStderr();
+  Cpp::Result<void> R = Cpp::TryDeclare("int err = ;", /*silent=*/true);
+  std::string Err = testing::internal::GetCapturedStderr();
+  ASSERT_FALSE(R.ok());
+  EXPECT_EQ(Err.find("expected expression"), std::string::npos);
+
+  Cpp::ArrayView<Cpp::DiagnosticRef> Diags = R.error().diagnostics();
+  ASSERT_GE(Diags.size(), 1U);
+  EXPECT_EQ(Diags[0].severity(), Cpp::DiagnosticSeverity::Error);
+  EXPECT_GT(std::strlen(Diags[0].message()), 0U);
+  // Drained into the slice, so nothing stays pending on the interpreter.
+  EXPECT_EQ(Cpp::GetPendingDiagnosticCount(), 0U);
+}
+
+// The forward comes back once the silent call returns: a following
+// non-silent TryDeclare reaches the chained printer again.
+TYPED_TEST(CPPINTEROP_TEST_MODE, Consumer_TryDeclareRestoresForwarding) {
+#ifdef _WIN32
+  GTEST_SKIP() << "chained diagnostic trips MSBuild error scanning on Windows";
+#endif
+  TestFixture::CreateInterpreter();
+  Cpp::TryDeclare("int err = ;", /*silent=*/true).ignore();
+  testing::internal::CaptureStderr();
+  Cpp::Result<void> R = Cpp::TryDeclare("int err2 = ;", /*silent=*/false);
+  std::string Err = testing::internal::GetCapturedStderr();
+  ASSERT_FALSE(R.ok());
+  EXPECT_NE(Err.find("expected expression"), std::string::npos);
+  EXPECT_GE(R.error().diagnostics().size(), 1U);
+}

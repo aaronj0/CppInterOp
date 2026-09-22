@@ -43,6 +43,11 @@ struct InterpreterInfo {
   // A deque keeps element addresses stable so DiagnosticRef::data
   // survives push_back.
   std::deque<StoredDiagView> StoredDiags;
+  // Whether the diagnostic consumer forwards to the consumer Clang had
+  // installed before it (the stderr printer). Capture into StoredDiags
+  // does not depend on it. TryDeclare(silent=true) clears it for the
+  // duration of the call.
+  bool ForwardDiags = true;
   // Owns the string arguments passed to clang during creation, since the
   // interpreter keeps the raw argv pointers for its whole lifetime
   std::vector<std::string> ArgvStorage;
@@ -57,6 +62,7 @@ struct InterpreterInfo {
 
   InterpreterInfo(InterpreterInfo&& Other) noexcept
       : Interpreter(Other.Interpreter), isOwned(Other.isOwned),
+        ForwardDiags(Other.ForwardDiags),
         ArgvStorage(std::move(Other.ArgvStorage)),
         OdrUseCounter(Other.OdrUseCounter) {
     Other.Interpreter = nullptr;
@@ -68,6 +74,7 @@ struct InterpreterInfo {
         delete Interpreter;
       Interpreter = Other.Interpreter;
       isOwned = Other.isOwned;
+      ForwardDiags = Other.ForwardDiags;
       ArgvStorage = std::move(Other.ArgvStorage);
       OdrUseCounter = Other.OdrUseCounter;
       Other.Interpreter = nullptr;

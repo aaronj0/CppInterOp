@@ -68,6 +68,41 @@ def Declare : CppInterOpAPI {
   ];
 }
 
+def TryDeclare : CppInterOpAPI {
+  let Doc = [{Declares the code snippet in \c code without executing it, like
+Declare, and reports the outcome as a Result instead of an int.
+\param[in] code - the snippet to declare.
+\param[in] silent - when true, the diagnostics the snippet produces are
+          captured into the returned error but not forwarded to the
+          interpreter's diagnostic printer. Unlike Declare's \c silent this
+          suppresses nothing, so the error still carries them.
+\returns an ok() Result on success. When Clang rejects the snippet the error
+         has Status::ParseError and its diagnostics() hold every diagnostic
+         the snippet produced. A failure reported outside the
+         DiagnosticsEngine, such as an unresolved symbol at JIT time, yields
+         Status::CompileError with no diagnostics.}];
+  // Result<void> owns a refcount and has no C ABI mapping.
+  let NoCWrapper = true;
+  let ReturnType = "Result<void>";
+  let Args = [
+    Arg<"const char*", "code">,
+    Arg<"bool", "silent", "false">
+  ];
+}
+
+def TryProcess : CppInterOpAPI {
+  let Doc = [{Declares and executes the code snippet in \c code, like Process,
+and reports the outcome as a Result instead of an int. \c silent and the
+Status of the error follow the TryDeclare contract.}];
+  // Result<void> owns a refcount and has no C ABI mapping.
+  let NoCWrapper = true;
+  let ReturnType = "Result<void>";
+  let Args = [
+    Arg<"const char*", "code">,
+    Arg<"bool", "silent", "false">
+  ];
+}
+
 def Evaluate : CppInterOpAPI {
   let Doc = [{Declares, executes and returns the execution result as a typed
 \c Cpp::Box carrying the Kind tag and the source QualType (when available).

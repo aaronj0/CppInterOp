@@ -27,6 +27,30 @@ TEST(DispatchSmokeTest, DeclareAndProcess) {
   EXPECT_EQ(0, Cpp::Process("dispatch_x++;"));
 }
 
+// Result<void> crosses the RTLD_LOCAL boundary: the error slice lives
+// in libclangCppInterOp, and status(), the diagnostic accessors and
+// the refcount hooks behind share() all go through the table.
+TEST(DispatchSmokeTest, TryDeclareResult) {
+  Cpp::CreateInterpreter({});
+  EXPECT_TRUE(Cpp::TryDeclare("int dispatch_try_ok = 1;").ok());
+  EXPECT_TRUE(Cpp::TryProcess("dispatch_try_ok++;").ok());
+
+  Cpp::Result<void> R =
+      Cpp::TryDeclare("int dispatch_try_err = ;", /*silent=*/true);
+  ASSERT_FALSE(R.ok());
+  EXPECT_EQ(R.status(), Cpp::Status::ParseError);
+  Cpp::ArrayView<Cpp::DiagnosticRef> Diags = Cpp::GetDiagnostics(R.error());
+  ASSERT_GE(Diags.size(), 1U);
+  EXPECT_EQ(Diags[0].severity(), Cpp::DiagnosticSeverity::Error);
+  EXPECT_NE(std::strlen(Diags[0].message()), 0U);
+
+  Cpp::CapturedError C = R.share();
+  EXPECT_EQ(C.status(), Cpp::Status::ParseError);
+  EXPECT_STREQ(C.producer(), "TryDeclare");
+  Cpp::ErrorRecord Rec = C.record();
+  EXPECT_EQ(Rec.Diagnostics.size(), Diags.size());
+}
+
 // --- Scope queries ---
 
 TEST(DispatchSmokeTest, ScopeLookup) {

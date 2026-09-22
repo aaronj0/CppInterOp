@@ -429,6 +429,58 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, Interpreter_Process) {
   EXPECT_FALSE(Cpp::Process("int f(); int res = f();") == 0);
 }
 
+TYPED_TEST(CPPINTEROP_TEST_MODE, Interpreter_TryDeclare) {
+  TestFixture::CreateInterpreter();
+  EXPECT_TRUE(Cpp::TryDeclare("int try_declare_ok = 1;").ok());
+
+  // silent=true keeps the diagnostic off stderr and inside the Result.
+  testing::internal::CaptureStderr();
+  Cpp::Result<void> R =
+      Cpp::TryDeclare("int try_declare_err = ;", /*silent=*/true);
+  std::string Err = testing::internal::GetCapturedStderr();
+  ASSERT_FALSE(R.ok());
+  EXPECT_EQ(R.status(), Cpp::Status::ParseError);
+  EXPECT_THAT(Err, ::testing::Not(::testing::HasSubstr("expected expression")));
+
+  Cpp::ArrayView<Cpp::DiagnosticRef> Diags = Cpp::GetDiagnostics(R.error());
+  ASSERT_GE(Diags.size(), 1U);
+  EXPECT_EQ(Diags[0].severity(), Cpp::DiagnosticSeverity::Error);
+  EXPECT_THAT(Diags[0].message(), ::testing::HasSubstr("expected expression"));
+  EXPECT_STREQ(R.error().producer(), "TryDeclare");
+}
+
+TYPED_TEST(CPPINTEROP_TEST_MODE, Interpreter_TryProcess) {
+#ifdef EMSCRIPTEN_STATIC_LIBRARY
+  GTEST_SKIP() << "Test fails for Emscipten static library build";
+#endif
+#ifdef _WIN32
+  GTEST_SKIP() << "Disabled on Windows. Needs fixing.";
+#endif
+  if (TypeParam::isOutOfProcess)
+    GTEST_SKIP() << "Test fails for OOP JIT builds";
+  std::vector<const char*> interpreter_args = {"-include", "new", "-Xclang",
+                                               "-iwithsysroot/include/compat"};
+  TestFixture::CreateInterpreter(interpreter_args);
+  EXPECT_TRUE(Cpp::TryProcess("").ok());
+  EXPECT_TRUE(Cpp::TryProcess("int try_process_a = 12;").ok());
+
+  Cpp::Result<void> R =
+      Cpp::TryProcess("try_process_error_here;", /*silent=*/true);
+  ASSERT_FALSE(R.ok());
+  EXPECT_EQ(R.status(), Cpp::Status::ParseError);
+  EXPECT_GE(Cpp::GetDiagnostics(R.error()).size(), 1U);
+  EXPECT_STREQ(R.error().producer(), "TryProcess");
+
+  // Linker/JIT error: reported outside the DiagnosticsEngine, so no
+  // diagnostic is captured.
+  Cpp::Result<void> L =
+      Cpp::TryProcess("int try_process_f(); int try_process_res = "
+                      "try_process_f();");
+  ASSERT_FALSE(L.ok());
+  EXPECT_EQ(L.status(), Cpp::Status::CompileError);
+  EXPECT_EQ(Cpp::GetDiagnostics(L.error()).size(), 0U);
+}
+
 // libc_nonshared.a symbols are per-module and invisible to dlsym; jitted
 // calls resolve to this library's copy (pure code) or to the JIT-side
 // registration shims (at_quick_exit, pthread_atfork).

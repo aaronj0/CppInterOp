@@ -195,7 +195,8 @@ namespace {
 /// Captures every diagnostic the parser/sema emits into the owning
 /// interpreter's StoredDiags and forwards to the previously installed
 /// consumer (typically Clang's TextDiagnosticPrinter) so existing
-/// stderr output is preserved. Owned holds the chained consumer when
+/// stderr output is preserved. The forward is gated on
+/// InterpreterInfo::ForwardDiags. Owned holds the chained consumer when
 /// the engine owned it (clang-REPL); Raw points at it regardless of
 /// ownership so cling's externally-owned consumer also forwards.
 class CppInteropDiagConsumer : public clang::DiagnosticConsumer {
@@ -245,7 +246,7 @@ void CppInteropDiagConsumer::HandleDiagnostic(
   // Update the base consumer's NumErrors so hasErrorOccurred() keeps
   // working for callers that still rely on it.
   clang::DiagnosticConsumer::HandleDiagnostic(Level, Info);
-  if (Raw)
+  if (Raw && II->ForwardDiags)
     Raw->HandleDiagnostic(Level, Info);
 
   llvm::SmallString<128> Buf;

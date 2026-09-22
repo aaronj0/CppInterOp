@@ -5664,6 +5664,64 @@ int Process(const char* code) {
   return INTEROP_RETURN(getInterp().process(code));
 }
 
+namespace {
+/// Saves, sets and restores InterpreterInfo::ForwardDiags, so a call
+/// that only captures diagnostics leaves the chained printer active
+/// once it returns.
+class DiagForwardingScope {
+public:
+  DiagForwardingScope(InterpreterInfo& Info, bool Forward)
+      : Info(Info), Saved(Info.ForwardDiags) {
+    Info.ForwardDiags = Forward;
+  }
+  ~DiagForwardingScope() { Info.ForwardDiags = Saved; }
+  DiagForwardingScope(const DiagForwardingScope&) = delete;
+  DiagForwardingScope& operator=(const DiagForwardingScope&) = delete;
+
+private:
+  InterpreterInfo& Info;
+  bool Saved;
+};
+} // namespace
+
+// Shared body of TryDeclare and TryProcess. The diagnostic consumer
+// keeps capturing while the forward is off, so `silent` only keeps the
+// diagnostics away from the chained printer. An error-severity entry in
+// the captured diagnostics marks a snippet Clang rejected (ParseError).
+// The engine's own error state is not usable for that: clang-repl
+// resets it on a failed parse before returning. A failure with no such
+// entry was reported outside the DiagnosticsEngine (CompileError).
+static Result<void> TryRun(const char* code, bool silent, bool execute,
+                           const char* Producer, const char* ProducerSig) {
+  InterpreterInfo& Info = getInterpInfo();
+  compat::Interpreter& I = *Info.Interpreter;
+  ClearPending(&Info);
+  DiagForwardingScope Forwarding(Info, /*Forward=*/!silent);
+  int rc = execute ? I.process(code) : I.declare(code);
+  bool HadError = llvm::any_of(Info.StoredDiags, [](const StoredDiagView& Dv) {
+    return Dv.Sev >= DiagnosticSeverity::Error;
+  });
+  if (rc == 0 && !HadError) {
+    ClearPending(&Info);
+    return Result<void>();
+  }
+  Status S = HadError ? Status::ParseError : Status::CompileError;
+  return Result<void>(
+      makeError(&Info, S, /*Message=*/"", Producer, ProducerSig));
+}
+
+Result<void> TryDeclare(const char* code, bool silent) {
+  INTEROP_TRACE(code, silent);
+  return INTEROP_RETURN(
+      TryRun(code, silent, /*execute=*/false, __func__, INTEROP_FUNC_SIG));
+}
+
+Result<void> TryProcess(const char* code, bool silent) {
+  INTEROP_TRACE(code, silent);
+  return INTEROP_RETURN(
+      TryRun(code, silent, /*execute=*/true, __func__, INTEROP_FUNC_SIG));
+}
+
 // Classify the QualType of a successfully-evaluated value into a
 // Box::Kind. clang::Value's own ctor asserts on builtins the X-macro
 // doesn't list (`__int128`, `_BitInt`, `_Float16`, ...), so by the time
