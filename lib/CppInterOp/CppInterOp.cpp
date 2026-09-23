@@ -3361,6 +3361,30 @@ intptr_t GetVariableOffset(compat::Interpreter& I, Decl* D,
     auto GD = GlobalDecl(VD);
     std::string mangledName;
     compat::maybeMangleDeclName(GD, mangledName);
+
+    // A name without external linkage is module-local: no process or library
+    // symbol can legitimately be this entity, and a missed JIT lookup can
+    // fall through to a symbol autoloader, which may load an unrelated
+    // library that exports the name. Serve the evaluated value directly.
+    if (!VD->hasExternalFormalLinkage()) {
+      if (!VD->hasInit()) {
+        if (VarDecl* Def = VD->getDefinition()) {
+          VD = Def;
+        } else if (VD->getTemplateInstantiationPattern()) {
+          getSema().InstantiateVariableDefinition(SourceLocation(), VD);
+          if (VarDecl* Inst = VD->getDefinition())
+            VD = Inst;
+        }
+      }
+      if (VD->hasInit() &&
+          (VD->isConstexpr() || VD->getType().isConstQualified())) {
+        if (const APValue* val = VD->evaluateValue()) {
+          if (VD->getType()->isIntegralType(C))
+            return (intptr_t)val->getInt().getRawData();
+        }
+      }
+    }
+
     void* address = llvm::sys::DynamicLibrary::SearchForAddressOfSymbol(
         mangledName.c_str());
 

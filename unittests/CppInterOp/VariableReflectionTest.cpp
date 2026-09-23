@@ -11,6 +11,7 @@
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Sema/Sema.h"
 
+#include "llvm/Support/DynamicLibrary.h"
 #include "llvm/Support/Error.h"
 
 #include "gtest/gtest.h"
@@ -356,6 +357,27 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, VariableReflection_GetVariableOffset) {
   EXPECT_TRUE(var);
 
   EXPECT_TRUE(Cpp::GetVariableOffset(var));
+}
+
+TYPED_TEST(CPPINTEROP_TEST_MODE,
+           VariableReflection_GetVariableOffset_ModuleLocal) {
+  std::vector<Decl*> Decls;
+  GetAllTopLevelDecls("constexpr int ModuleLocalkonst = 4;", Decls);
+  ASSERT_EQ(1U, Decls.size());
+
+  // A module-local (internal linkage) name must never bind to a foreign
+  // symbol that happens to share its spelling; on Windows a missed lookup
+  // can even autoload the exporting library. The evaluated initializer
+  // serves the value instead.
+  int decoy = 99;
+  // cover both manglings of an internal-linkage global: plain (MSVC) and
+  // _ZL-prefixed (Itanium)
+  llvm::sys::DynamicLibrary::AddSymbol("ModuleLocalkonst", &decoy);
+  llvm::sys::DynamicLibrary::AddSymbol("_ZL16ModuleLocalkonst", &decoy);
+
+  intptr_t offset = Cpp::GetVariableOffset(Decls[0]);
+  ASSERT_TRUE(offset);
+  EXPECT_EQ(4, *(int*)offset);
 }
 
 TYPED_TEST(CPPINTEROP_TEST_MODE,
