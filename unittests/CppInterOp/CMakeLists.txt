@@ -169,6 +169,16 @@ if(NOT EMSCRIPTEN AND BUILD_SHARED_LIBS)
     COMMAND TestDownstreamLoader $<TARGET_FILE:clangCppInterOp>)
   set_tests_properties(cppinterop-DownstreamLoaderTest PROPERTIES
     TIMEOUT "${TIMEOUT_VALUE}")
+
+  # Same DSO opened RTLD_GLOBAL: guards against the inline Cpp:: wrappers
+  # interposing the real CreateInterpreter and making the dispatch table
+  # recurse into the consumer. Fails on a default-visibility Dispatch.h.
+  if(UNIX AND NOT APPLE)
+    add_test(NAME cppinterop-DownstreamLoaderTest-global
+      COMMAND TestDownstreamLoader $<TARGET_FILE:clangCppInterOp> global)
+    set_tests_properties(cppinterop-DownstreamLoaderTest-global PROPERTIES
+      TIMEOUT "${TIMEOUT_VALUE}")
+  endif()
 endif()
 
 # Dispatch Tests.
