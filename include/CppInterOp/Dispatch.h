@@ -119,6 +119,24 @@ using namespace Cpp;
 // exclusive (#error guard at top) so only one body of Cpp::* exists per TU.
 // CN (CppName) may differ from DN (DispatchName) for overloaded functions,
 // e.g. CN=GetFunctionAddress, DN=GetFunctionAddress_fn.
+//
+// These wrappers share their mangled names with CppInterOp's real Cpp::*
+// definitions. A consumer translation unit built without inlining (a Debug -O0
+// build) emits them out-of-line as weak, default-visibility symbols. When the
+// consumer library is loaded into the global scope (RTLD_GLOBAL) those weak
+// stubs interpose the real implementations inside the RTLD_LOCAL CppInterOp
+// library. The CppGetProcAddress table takes &Cpp::CreateInterpreter through the
+// GOT, so it captures the consumer's own stub, LoadDispatchAPI stores that
+// address, and the stub forwards through the table straight back into itself
+// until the stack overflows. Hidden visibility keeps every out-of-line stub
+// private to the consumer, so it can neither be exported nor interpose, at any
+// optimization level. The DispatchRaw pointers above stay exported on purpose.
+// A JIT reflecting the Cpp:: API inlines these wrapper bodies and resolves the
+// calls against those pointers, the same surface an optimized build presents
+// once the wrappers inline away.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC visibility push(hidden) // Cpp:: dispatch wrappers, never exported
+#endif
 namespace Cpp {
 
 #define CPPINTEROP_API_FUNC(DN, CN, Ret, DeclArgs, CallArgs, RawTypes)         \
@@ -162,5 +180,9 @@ inline void UnloadDispatchAPI() {
   dlGetProcAddress(nullptr, nullptr);
 }
 } // namespace Cpp
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC visibility pop // Cpp:: dispatch wrappers
+#endif
 
 #endif // CPPINTEROP_DISPATCH_H
