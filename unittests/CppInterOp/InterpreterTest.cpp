@@ -427,6 +427,9 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, Interpreter_Process) {
   EXPECT_FALSE(Cpp::Process("error_here;") == 0);
   // Linker/JIT error.
   EXPECT_FALSE(Cpp::Process("int f(); int res = f();") == 0);
+  // Failed static initializer of a raw declaration.
+  EXPECT_FALSE(Cpp::Process("extern \"C\" int unresolved_fn();"
+                            "int unresolved_r = unresolved_fn();") == 0);
 }
 
 // libc_nonshared.a symbols are per-module and invisible to dlsym; jitted
