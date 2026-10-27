@@ -228,6 +228,9 @@ inline void codeComplete(std::vector<std::string>& Results,
 #if LLVM_VERSION_MAJOR > 21
 #include "clang/Basic/Version.h"
 #include "clang/Interpreter/IncrementalExecutor.h"
+#if LLVM_VERSION_MAJOR > 23
+#include "clang/Interpreter/OrcIncrementalExecutorBuilder.h"
+#endif
 
 #include "llvm/ExecutionEngine/Orc/Debugging/DebuggerSupport.h"
 #include "llvm/Support/FileSystem.h"
@@ -363,6 +366,14 @@ inline bool detectNVPTXArch(std::string& Arch) {
 }
 
 #if LLVM_VERSION_MAJOR > 21
+#if LLVM_VERSION_MAJOR > 23
+/// LLVM 24 split the executor builder by backend (llvm/llvm-project#230047):
+/// the base class is abstract and the ORC fields live on the ORC builder.
+using ExecutorBuilder = clang::OrcIncrementalExecutorBuilder;
+#else
+using ExecutorBuilder = clang::IncrementalExecutorBuilder;
+#endif
+
 /// Directory containing libclangCppInterOp itself, derived via
 /// `dladdr` of an in-library function pointer. Returns empty when the
 /// platform has no self-DSO discovery (Windows -- a `GetModuleHandleEx`
@@ -396,7 +407,7 @@ inline std::string findOwnLibraryDir() {
 /// (`clang/lib/Interpreter/IncrementalExecutor.cpp`, the
 /// `consume_front(parent_path(D.Dir))` guard) doesn't run -- our
 /// runtime lives outside the host's clang resource tree.
-inline bool configureBundledOOPRuntime(clang::IncrementalExecutorBuilder& B) {
+inline bool configureBundledOOPRuntime(ExecutorBuilder& B) {
   llvm::SmallVector<std::string, 4> Candidates;
   if (const char* Env = std::getenv("CPPINTEROP_RUNTIME_DIR"))
     Candidates.emplace_back(Env);
@@ -428,6 +439,19 @@ inline bool configureBundledOOPRuntime(clang::IncrementalExecutorBuilder& B) {
   return false;
 }
 #endif // LLVM_VERSION_MAJOR > 21
+
+/// `Interpreter::createWithCUDA` of LLVM up to 23; LLVM 24 main names the
+/// device language instead (llvm/llvm-project#231783).
+inline llvm::Expected<std::unique_ptr<clang::Interpreter>>
+createInterpreterWithCUDA(std::unique_ptr<clang::CompilerInstance> CI,
+                          std::unique_ptr<clang::CompilerInstance> DCI) {
+#if LLVM_VERSION_MAJOR > 23
+  return clang::Interpreter::createWithDevice(std::move(CI), std::move(DCI),
+                                              clang::OffloadType::CUDA);
+#else
+  return clang::Interpreter::createWithCUDA(std::move(CI), std::move(DCI));
+#endif
+}
 
 /// \param[out] DeviceCIOut when non-null, receives the device-side
 /// CompilerInstance in CUDA mode (nullptr otherwise). The instance is
@@ -472,9 +496,9 @@ createClangInterpreter(std::vector<const char*>& args, int stdin_fd = -1,
       });
   // The IncrementalExecutorBuilder must outlive the IncrementalCompiler
   // it gets attached to, so it's a unique_ptr at function scope.
-  std::unique_ptr<clang::IncrementalExecutorBuilder> OutOfProcessConfig;
+  std::unique_ptr<ExecutorBuilder> OutOfProcessConfig;
   if (oopRequested) {
-    OutOfProcessConfig = std::make_unique<clang::IncrementalExecutorBuilder>();
+    OutOfProcessConfig = std::make_unique<ExecutorBuilder>();
     OutOfProcessConfig->IsOutOfProcess = true;
     if (configureBundledOOPRuntime(*OutOfProcessConfig)) {
       outOfProcess = true;
@@ -501,9 +525,17 @@ createClangInterpreter(std::vector<const char*>& args, int stdin_fd = -1,
       detectCudaInstallPath(CompilerArgs, CudaPath);
 
     CB.SetOffloadArch(OffloadArch);
+#if LLVM_VERSION_MAJOR > 23
+    // llvm/llvm-project#231391: the offload entry points take the device
+    // language and the SDK setter is shared with ROCm.
+    if (!CudaPath.empty())
+      CB.SetDeviceSDK(CudaPath);
+    auto devOrErr = CB.CreateDevice(clang::OffloadType::CUDA);
+#else
     if (!CudaPath.empty())
       CB.SetCudaSDK(CudaPath);
     auto devOrErr = CB.CreateCudaDevice();
+#endif
     if (!devOrErr) {
       llvm::logAllUnhandledErrors(devOrErr.takeError(), llvm::errs(),
                                   "Failed to create device compiler:");
@@ -511,7 +543,12 @@ createClangInterpreter(std::vector<const char*>& args, int stdin_fd = -1,
     }
     DeviceCI = std::move(*devOrErr);
   }
+#if LLVM_VERSION_MAJOR > 23
+  auto ciOrErr =
+      CudaEnabled ? CB.CreateHost(clang::OffloadType::CUDA) : CB.CreateCpp();
+#else
   auto ciOrErr = CudaEnabled ? CB.CreateCudaHost() : CB.CreateCpp();
+#endif
   if (!ciOrErr) {
     llvm::logAllUnhandledErrors(ciOrErr.takeError(), llvm::errs(),
                                 "Failed to build Incremental compiler:");
@@ -541,15 +578,15 @@ createClangInterpreter(std::vector<const char*>& args, int stdin_fd = -1,
     };
   }
   auto innerOrErr =
-      CudaEnabled ? clang::Interpreter::createWithCUDA(std::move(*ciOrErr),
-                                                       std::move(DeviceCI))
+      CudaEnabled ? createInterpreterWithCUDA(std::move(*ciOrErr),
+                                              std::move(DeviceCI))
                   : clang::Interpreter::create(
                         std::move(*ciOrErr),
                         outOfProcess ? std::move(OutOfProcessConfig) : nullptr);
 #else
   auto innerOrErr =
-      CudaEnabled ? clang::Interpreter::createWithCUDA(std::move(*ciOrErr),
-                                                       std::move(DeviceCI))
+      CudaEnabled ? createInterpreterWithCUDA(std::move(*ciOrErr),
+                                              std::move(DeviceCI))
                   : clang::Interpreter::create(std::move(*ciOrErr));
 #endif
   if (!innerOrErr) {
