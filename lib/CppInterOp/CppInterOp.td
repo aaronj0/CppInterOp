@@ -1552,6 +1552,18 @@ def IsFunction : CppInterOpAPI {
   let Args = [Arg<"ConstDeclRef", "DRef">];
 }
 
+def HasAttr : CppInterOpAPI {
+  let Doc = [{Checks if the declaration carries every attribute in kind.
+kind can be an ORed value of enum AttrKind.
+An empty kind gives false.}];
+
+  let ReturnType = "bool";
+  let Args = [
+    Arg<"ConstDeclRef", "DRef">,
+    Arg<"AttrKind", "kind">
+  ];
+}
+
 def IsFunctionPointerType : CppInterOpAPI {
   let Doc = "Checks if the type is a function pointer.";
   let ReturnType = "bool";

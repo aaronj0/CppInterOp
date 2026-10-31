@@ -354,6 +354,15 @@ enum QualKind : unsigned char {
   All = Const | Volatile | Restrict
 };
 
+/// Attributes a declaration can carry, for HasAttr. Values can be ORed.
+enum AttrKind : unsigned char {
+  CUDAGlobal = 1 << 0,
+  CUDADevice = 1 << 1,
+  CUDAHost = 1 << 2,
+  CUDAConstant = 1 << 3,
+  CUDAShared = 1 << 4
+};
+
 /// Enum modelling programming languages.
 enum class InterpreterLanguage : unsigned char {
   Unknown,
@@ -440,6 +449,12 @@ enum class DeallocType : unsigned char {
 
 inline QualKind operator|(QualKind a, QualKind b) {
   return static_cast<QualKind>(static_cast<unsigned char>(a) |
+                               static_cast<unsigned char>(b));
+}
+
+inline AttrKind operator|(AttrKind a, AttrKind b) {
+  // NOLINTNEXTLINE(clang-analyzer-optin.core.EnumCastOutOfRange)
+  return static_cast<AttrKind>(static_cast<unsigned char>(a) |
                                static_cast<unsigned char>(b));
 }
 

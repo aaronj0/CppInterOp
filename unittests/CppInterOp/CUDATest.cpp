@@ -132,6 +132,60 @@ TEST_F(CUDATest, Interpreter_GetLanguageCUDA) {
   EXPECT_EQ(Cpp::GetLanguage(nullptr), Cpp::InterpreterLanguage::CUDA);
 }
 
+TEST_F(CUDATest, HasAttr) {
+  SKIP_IF_NO_SDK;
+
+  Cpp::CreateInterpreter({}, {"--cuda"});
+  EXPECT_EQ(0, Cpp::Declare(R"(
+    __global__ void kernel(int* x) { *x = 1; }
+    __device__ int device_fn(int x) { return x; }
+    __host__ __device__ int both(int x) { return x; }
+    void host_fn(int* x) { *x = 2; }
+    __constant__ int c = 1;
+  )"));
+  EXPECT_TRUE(Cpp::HasAttr(Cpp::GetNamed("kernel"), Cpp::CUDAGlobal));
+  EXPECT_FALSE(Cpp::HasAttr(Cpp::GetNamed("kernel"), Cpp::CUDADevice));
+  EXPECT_TRUE(Cpp::HasAttr(Cpp::GetNamed("device_fn"), Cpp::CUDADevice));
+  EXPECT_FALSE(Cpp::HasAttr(Cpp::GetNamed("device_fn"), Cpp::CUDAHost));
+  EXPECT_TRUE(
+      Cpp::HasAttr(Cpp::GetNamed("both"), Cpp::CUDAHost | Cpp::CUDADevice));
+  EXPECT_FALSE(
+      Cpp::HasAttr(Cpp::GetNamed("kernel"), Cpp::CUDAGlobal | Cpp::CUDADevice));
+  EXPECT_FALSE(Cpp::HasAttr(Cpp::GetNamed("host_fn"), Cpp::CUDAHost));
+  EXPECT_TRUE(Cpp::HasAttr(Cpp::GetNamed("c"), Cpp::CUDAConstant));
+}
+
+TEST(CUDAHostOnlyTest, HasAttrWithoutToolkit) {
+#if defined(CPPINTEROP_USE_CLING) || defined(_WIN32)
+  GTEST_SKIP() << "FIXME: Enable for cling and Windows.";
+#endif
+  // A host-only CUDA parse attaches the attributes without a toolkit.
+  ASSERT_TRUE(Cpp::CreateInterpreter(
+      {"-xcuda", "--cuda-host-only", "-nocudainc", "-nocudalib"}));
+  ASSERT_EQ(0, Cpp::Declare(R"(
+    __attribute__((global)) void kernel(int* x);
+    __attribute__((device)) int device_fn(int x);
+    __attribute__((host)) __attribute__((device)) int both(int x);
+    void host_fn(int* x);
+    __attribute__((constant)) extern int c;
+    __attribute__((shared)) int s;
+  )"));
+  EXPECT_TRUE(Cpp::HasAttr(Cpp::GetNamed("kernel"), Cpp::CUDAGlobal));
+  EXPECT_TRUE(Cpp::HasAttr(Cpp::GetNamed("device_fn"), Cpp::CUDADevice));
+  EXPECT_FALSE(Cpp::HasAttr(Cpp::GetNamed("kernel"), Cpp::CUDADevice));
+  EXPECT_TRUE(
+      Cpp::HasAttr(Cpp::GetNamed("both"), Cpp::CUDAHost | Cpp::CUDADevice));
+  EXPECT_FALSE(Cpp::HasAttr(Cpp::GetNamed("host_fn"), Cpp::CUDAHost));
+  EXPECT_TRUE(Cpp::HasAttr(Cpp::GetNamed("c"), Cpp::CUDAConstant));
+  EXPECT_FALSE(Cpp::HasAttr(Cpp::GetNamed("kernel"), Cpp::CUDAConstant));
+  EXPECT_TRUE(Cpp::HasAttr(Cpp::GetNamed("s"), Cpp::CUDAShared));
+  EXPECT_FALSE(Cpp::HasAttr(Cpp::GetNamed("kernel"), Cpp::CUDAShared));
+  EXPECT_FALSE(
+      Cpp::HasAttr(Cpp::GetNamed("kernel"), Cpp::CUDAGlobal | Cpp::CUDADevice));
+  EXPECT_FALSE(Cpp::HasAttr(Cpp::GetNamed("kernel"), Cpp::AttrKind{}));
+  EXPECT_FALSE(Cpp::HasAttr(nullptr, Cpp::CUDAGlobal));
+}
+
 TEST_F(CUDATest, SimpleKernelExecution) {
   SKIP_IF_NO_RUNTIME;
 
