@@ -755,6 +755,7 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, ScopeReflection_GetUsingNamespaces) {
 }
 
 TYPED_TEST(CPPINTEROP_TEST_MODE, ScopeReflection_GetGlobalScope) {
+  TestFixture::CreateInterpreter();
   EXPECT_EQ(Cpp::GetQualifiedName(Cpp::GetGlobalScope()), "");
   EXPECT_EQ(Cpp::GetName(Cpp::GetGlobalScope()), "");
 }
