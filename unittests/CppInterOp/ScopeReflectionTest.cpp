@@ -1011,6 +1011,84 @@ TYPED_TEST(CPPINTEROP_TEST_MODE, ScopeReflection_GetNamedWithUsing) {
       << "anonymous-namespace member should be visible at TU scope";
 }
 
+TYPED_TEST(CPPINTEROP_TEST_MODE, ScopeReflection_GetNamedQualified) {
+  std::string code = R"(
+    namespace N {
+      enum E { a };
+      struct Outer { enum In { b }; typedef E Alias; };
+      template <class T, class U = int> struct Tmpl {
+        typedef T value_type;
+        enum TE { c };
+      };
+      template <int I> struct Fixed { enum FE { d }; };
+      template <class T> using EAlias = E;
+      template <class T> using PAlias = E*;
+      typedef Tmpl<char> TC;
+      class Hidden { enum HE { h }; };
+    }
+    namespace NA = N;
+    namespace UD { using namespace N; }
+    namespace P { enum PE { p }; namespace Q {} }
+    struct B { enum BE { be }; };
+    struct D : B {};
+  )";
+
+  TestFixture::CreateInterpreter();
+  Interp->declare(code);
+
+  auto IsEnumTypedef = [](Cpp::DeclRef D) {
+    return Cpp::IsTypedefed(D) && Cpp::IsEnumType(Cpp::GetTypeFromScope(D));
+  };
+
+  Cpp::DeclRef ns_N = Cpp::GetNamed("N");
+  ASSERT_TRUE(Cpp::IsNamespace(ns_N));
+  Cpp::DeclRef E = Cpp::GetNamed("N::E");
+  EXPECT_TRUE(Cpp::IsEnumScope(E));
+  EXPECT_EQ(E, Cpp::GetNamed("E", ns_N));
+  EXPECT_EQ(Cpp::GetNamed("::N::E"), E);
+  EXPECT_EQ(Cpp::GetNamed("NA::E"), E);
+  EXPECT_EQ(Cpp::GetNamed("UD::E"), E);
+  EXPECT_TRUE(Cpp::IsEnumScope(Cpp::GetNamed("N::Outer::In")));
+  EXPECT_TRUE(Cpp::IsEnumScope(Cpp::GetNamed("Outer::In", ns_N)));
+  EXPECT_TRUE(IsEnumTypedef(Cpp::GetNamed("N::Outer::Alias")));
+
+  Cpp::DeclRef tmpl_int = Cpp::GetNamed("N::Tmpl<int>");
+  EXPECT_TRUE(Cpp::IsTemplateSpecialization(tmpl_int));
+  EXPECT_EQ(Cpp::GetNamed("N::Tmpl<int, int>"), tmpl_int);
+  EXPECT_EQ(Cpp::GetNamed("Tmpl<int>", ns_N), tmpl_int);
+
+  EXPECT_TRUE(IsEnumTypedef(Cpp::GetNamed("N::Tmpl<N::E>::value_type")));
+  Cpp::DeclRef ptr_vt = Cpp::GetNamed("N::Tmpl<const N::E*>::value_type");
+  EXPECT_TRUE(Cpp::IsTypedefed(ptr_vt) &&
+              Cpp::IsPointerType(Cpp::GetTypeFromScope(ptr_vt)));
+  EXPECT_TRUE(IsEnumTypedef(
+      Cpp::GetNamed("N::Tmpl<N::Tmpl<int>::TE, char>::value_type")));
+  EXPECT_TRUE(Cpp::IsTypedefed(Cpp::GetNamed("N::TC::value_type")));
+
+  EXPECT_TRUE(Cpp::IsEnumScope(Cpp::GetNamed("N::Fixed<3>::FE")));
+  EXPECT_EQ(Cpp::GetNamed("N::EAlias<int>"), E);
+  EXPECT_FALSE(Cpp::GetNamed("N::PAlias<int>"));
+  EXPECT_TRUE(
+      IsEnumTypedef(Cpp::GetNamed("N::Tmpl<N::Hidden::HE>::value_type")));
+  EXPECT_TRUE(Cpp::IsEnumScope(Cpp::GetNamed("D::BE")));
+
+  EXPECT_FALSE(Cpp::GetNamed("P::Q::PE"));
+  EXPECT_FALSE(Cpp::GetNamed("Tmpl<int>", Cpp::GetNamed("N::Outer")));
+  EXPECT_FALSE(Cpp::GetNamed("N::Missing"));
+  EXPECT_FALSE(Cpp::GetNamed("N::Tmpl<Missing>::value_type"));
+  EXPECT_FALSE(Cpp::GetNamed("Missing::E"));
+
+  testing::internal::CaptureStderr();
+  EXPECT_FALSE(Cpp::GetNamed("N::Fixed<int>::FE"));
+  EXPECT_FALSE(Cpp::GetNamed("N::Tmpl<int,>"));
+  EXPECT_FALSE(Cpp::GetNamed("N::Tmpl<int>>"));
+  EXPECT_EQ(testing::internal::GetCapturedStderr(), "");
+
+  // The failed parse leaves the interpreter able to take more input.
+  EXPECT_EQ(Interp->declare("namespace N { enum Later { l }; }"), 0);
+  EXPECT_TRUE(IsEnumTypedef(Cpp::GetNamed("N::Tmpl<N::Later>::value_type")));
+}
+
 TYPED_TEST(CPPINTEROP_TEST_MODE, ScopeReflection_IsVisibleName) {
   std::string code = R"(
     namespace N {

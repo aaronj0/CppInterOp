@@ -72,6 +72,7 @@
 #include "clang/Basic/Version.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Interpreter/Interpreter.h"
+#include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/Lookup.h"
 #include "clang/Sema/Overload.h"
 #include "clang/Sema/Ownership.h"
@@ -1440,6 +1441,95 @@ bool HasReachableUsingDirective(const clang::DeclContext* DC) {
 }
 } // namespace
 
+// The context that names following "D::" are looked up in: a namespace or the
+// definition of a class, also through an alias. Completes the class if needed.
+static DeclContext* GetLookupContext(Decl* D) {
+  if (auto* ND = dyn_cast<NamedDecl>(D))
+    D = ND->getUnderlyingDecl();
+  if (isa<NamespaceDecl, TranslationUnitDecl>(D))
+    return cast<DeclContext>(D);
+  if (auto* TND = dyn_cast<TypedefNameDecl>(D))
+    D = TND->getUnderlyingType()->getAsCXXRecordDecl();
+  return GetCXXRecordDefinition(D);
+}
+
+// Qualified lookup of Name in DC, or lookup from the translation unit scope if
+// DC is null. Null unless the result is a single declaration.
+static NamedDecl* LookupInContext(Sema& S, llvm::StringRef Name,
+                                  DeclContext* DC, Sema::LookupNameKind Kind) {
+  LookupResult R(S, &S.Context.Idents.get(Name), SourceLocation(), Kind);
+  CppInternal::utils::Lookup::Named(&S, R, DC);
+  return R.isSingleResult() ? R.getFoundDecl() : nullptr;
+}
+
+// The type Name spells as if written inside DC, parsed by clang's parser the
+// way it parses the types in API notes. Null if Name is not a valid type.
+static QualType ParseTypeName(Sema& S, llvm::StringRef Name, DeclContext* DC) {
+  SyntheticScopeChain Chain(S, DC);
+  // Sema's errors become silent substitution failures, which drops access
+  // errors as lookups ignore access, and typo correction stays off.
+  Sema::TentativeAnalysisScope Tentative(S);
+  clangSilent Silence(S.getDiagnostics());
+  bool HadError = S.getDiagnostics().hasErrorOccurred();
+  clang::DiagnosticErrorTrap Trap(S.getDiagnostics());
+  TypeResult R =
+      S.ParseTypeFromStringCallback(Name, "<GetNamed>", SourceLocation());
+  // The parser leaves the tokens it entered on the lexer stack until it lexes
+  // again, where the next input would find them.
+  S.getPreprocessor().RemoveTopOfLexerStack();
+  if (Trap.hasErrorOccurred()) {
+    // The parser's own errors still count, and would fail the next input.
+    if (!HadError)
+      S.getDiagnostics().Reset(/*soft=*/true);
+    return QualType();
+  }
+  return R.isUsable() ? Sema::GetTypeFromParser(R.get()) : QualType();
+}
+
+// GetNamed for a name with "::" or template arguments. clang's parser resolves
+// the name up to its last template-id as a type. The components after it are
+// found by qualified lookup, each in the previous one, so namespaces follow
+// their using-directives and classes search their bases, but enclosing scopes
+// are never searched.
+static NamedDecl* GetNamedQualified(Sema& S, llvm::StringRef Name,
+                                    DeclContext* Within) {
+  Decl* Scope = Within ? Decl::castFromDeclContext(Within) : nullptr;
+  size_t TemplateIdEnd = Name.rfind('>');
+  if (TemplateIdEnd != llvm::StringRef::npos) {
+    // The parser would also search the scopes enclosing Within, so the first
+    // component is looked up in Within alone beforehand.
+    llvm::StringRef First =
+        Name.take_while([](char C) { return isAsciiIdentifierContinue(C); });
+    if (Scope && !First.empty()) {
+      DeclContext* DC = GetLookupContext(Scope);
+      if (!DC || !LookupInContext(S, First, DC, Sema::LookupOrdinaryName))
+        return nullptr;
+    }
+    QualType T = ParseTypeName(S, Name.take_front(TemplateIdEnd + 1), Within);
+    Scope = T.isNull() ? nullptr : T->getAsTagDecl();
+    Name = Name.drop_front(TemplateIdEnd + 1).ltrim();
+    if (!Scope || !(Name.empty() || Name.consume_front("::")))
+      return nullptr;
+  } else if (Name.consume_front("::")) {
+    Scope = S.Context.getTranslationUnitDecl();
+  }
+  llvm::SmallVector<llvm::StringRef, 4> Parts;
+  if (!Name.empty())
+    Name.split(Parts, "::");
+  for (size_t I = 0; I < Parts.size(); ++I) {
+    DeclContext* DC = Scope ? GetLookupContext(Scope) : nullptr;
+    if (Scope && !DC)
+      return nullptr;
+    Scope = LookupInContext(S, Parts[I].trim(), DC,
+                            I + 1 < Parts.size()
+                                ? Sema::LookupNestedNameSpecifierName
+                                : Sema::LookupOrdinaryName);
+    if (!Scope)
+      return nullptr;
+  }
+  return dyn_cast<NamedDecl>(Scope->getCanonicalDecl());
+}
+
 DeclRef GetNamed(const std::string& name, ConstDeclRef parent /*= nullptr*/) {
   INTEROP_TRACE(name, parent);
   clang::DeclContext* Within = nullptr;
@@ -1448,6 +1538,8 @@ DeclRef GetNamed(const std::string& name, ConstDeclRef parent /*= nullptr*/) {
     Within = llvm::dyn_cast<clang::DeclContext>(D);
   }
   compat::SynthesizingCodeRAII RAII(&getInterp());
+  if (name.find_first_of(":<") != std::string::npos)
+    return INTEROP_RETURN(GetNamedQualified(getSema(), name, Within));
   if (Within)
     Within->getPrimaryContext()->buildLookup();
 
