@@ -1440,6 +1440,145 @@ bool HasReachableUsingDirective(const clang::DeclContext* DC) {
 }
 } // namespace
 
+static QualType findBuiltinType(llvm::StringRef typeName, ASTContext& Context);
+static Decl* InstantiateTemplate(TemplateDecl* TemplateD,
+                                 TemplateArgumentListInfo& TLI, Sema& S,
+                                 bool instantiate_body);
+
+// Splits Name at each Sep that is not nested in <>, () or [].
+static llvm::SmallVector<llvm::StringRef, 4>
+SplitTopLevel(llvm::StringRef Name, llvm::StringRef Sep) {
+  llvm::SmallVector<llvm::StringRef, 4> Parts;
+  int Depth = 0;
+  size_t Begin = 0;
+  for (size_t I = 0; I < Name.size(); ++I) {
+    if (llvm::StringRef("<([").contains(Name[I])) {
+      ++Depth;
+    } else if (llvm::StringRef(">)]").contains(Name[I])) {
+      --Depth;
+    } else if (!Depth && Name.substr(I).starts_with(Sep)) {
+      Parts.push_back(Name.slice(Begin, I).trim());
+      Begin = I + Sep.size();
+      I = Begin - 1;
+    }
+  }
+  Parts.push_back(Name.substr(Begin).trim());
+  return Parts;
+}
+
+// The context that names following "D::" are looked up in: a namespace or the
+// definition of a class, also through an alias. Completes the class if needed.
+static DeclContext* GetLookupContext(Decl* D) {
+  if (auto* ND = dyn_cast<NamedDecl>(D))
+    D = ND->getUnderlyingDecl();
+  if (isa<NamespaceDecl, TranslationUnitDecl>(D))
+    return cast<DeclContext>(D);
+  if (auto* TND = dyn_cast<TypedefNameDecl>(D))
+    D = TND->getUnderlyingType()->getAsCXXRecordDecl();
+  return GetCXXRecordDefinition(D);
+}
+
+// Qualified lookup of Name in DC, or lookup from the translation unit scope if
+// DC is null. Null unless the result is a single declaration.
+static NamedDecl* LookupInContext(Sema& S, llvm::StringRef Name,
+                                  DeclContext* DC, Sema::LookupNameKind Kind) {
+  LookupResult R(S, &S.Context.Idents.get(Name), SourceLocation(), Kind);
+  CppInternal::utils::Lookup::Named(&S, R, DC);
+  return R.isSingleResult() ? R.getFoundDecl() : nullptr;
+}
+
+static NamedDecl* GetNamedQualified(Sema& S, llvm::StringRef Name,
+                                    Decl* Parent);
+
+// Resolves a builtin or named type with leading cv-qualifiers and trailing
+// const, '*', '&' or '&&'.
+static QualType ResolveType(Sema& S, llvm::StringRef Name, Decl* Parent) {
+  ASTContext& C = S.getASTContext();
+  Name = Name.trim();
+  auto Wrap = [&](auto Make) {
+    QualType T = ResolveType(S, Name, Parent);
+    return T.isNull() ? T : Make(T);
+  };
+  if (Name.consume_back("&&"))
+    return Wrap([&](QualType T) { return C.getRValueReferenceType(T); });
+  if (Name.consume_back("&"))
+    return Wrap([&](QualType T) { return C.getLValueReferenceType(T); });
+  if (Name.consume_back("*"))
+    return Wrap([&](QualType T) { return C.getPointerType(T); });
+  if (Name.consume_back(" const") || Name.consume_front("const "))
+    return Wrap([](QualType T) { return T.withConst(); });
+  if (Name.consume_front("volatile "))
+    return Wrap([](QualType T) { return T.withVolatile(); });
+  if (QualType T = findBuiltinType(Name, C); !T.isNull())
+    return T;
+  auto* TD = dyn_cast_or_null<TypeDecl>(GetNamedQualified(S, Name, Parent));
+  return TD ? compat::GetTypeFromDecl(TD) : QualType();
+}
+
+// Appends Arg as an int or bool literal, which Sema converts to the parameter
+// type, or else as a type.
+static bool AddTemplateArgument(Sema& S, llvm::StringRef Arg, Decl* Parent,
+                                TemplateArgumentListInfo& TLI) {
+  ASTContext& C = S.getASTContext();
+  TemplateArgument TA;
+  int Value = 0;
+  if (Arg == "true" || Arg == "false")
+    TA = TemplateArgument(CXXBoolLiteralExpr::Create(C, Arg == "true", C.BoolTy,
+                                                     SourceLocation()),
+                          /*IsCanonical=*/false);
+  else if (!Arg.getAsInteger(0, Value))
+    TA = TemplateArgument(S.ActOnIntegerConstant(SourceLocation(), Value).get(),
+                          /*IsCanonical=*/false);
+  else if (QualType T = ResolveType(S, Arg, Parent); !T.isNull())
+    TA = TemplateArgument(T);
+  else
+    return false;
+  TLI.addArgument(
+      S.getTrivialTemplateArgumentLoc(TA, QualType(), SourceLocation()));
+  return true;
+}
+
+// GetNamed for a qualified name or template-id. Each component after the first
+// is found by qualified lookup in the previous one, and template-ids are
+// instantiated.
+static NamedDecl* GetNamedQualified(Sema& S, llvm::StringRef Name,
+                                    Decl* Parent) {
+  llvm::SmallVector<llvm::StringRef, 4> Parts = SplitTopLevel(Name, "::");
+  Decl* Scope = Parent;
+  if (Parts.front().empty()) {
+    Scope = S.getASTContext().getTranslationUnitDecl();
+    Parts.erase(Parts.begin());
+  }
+  NamedDecl* ND = nullptr;
+  for (size_t I = 0; I < Parts.size(); ++I) {
+    DeclContext* DC = Scope ? GetLookupContext(Scope) : nullptr;
+    if (Scope && !DC)
+      return nullptr;
+    llvm::StringRef Part = Parts[I];
+    size_t LAngle = Part.find('<');
+    ND = LookupInContext(S, Part.take_front(LAngle).rtrim(), DC,
+                         I + 1 < Parts.size()
+                             ? Sema::LookupNestedNameSpecifierName
+                             : Sema::LookupOrdinaryName);
+    if (ND && LAngle != llvm::StringRef::npos) {
+      auto* TD = dyn_cast<TemplateDecl>(ND->getUnderlyingDecl());
+      if (!TD || !Part.consume_back(">"))
+        return nullptr;
+      TemplateArgumentListInfo TLI;
+      for (llvm::StringRef Arg : SplitTopLevel(Part.substr(LAngle + 1), ","))
+        if (!AddTemplateArgument(S, Arg, Parent, TLI))
+          return nullptr;
+      Sema::SFINAETrap Trap(S, /*ForValidityCheck=*/true);
+      ND = dyn_cast_or_null<NamedDecl>(
+          InstantiateTemplate(TD, TLI, S, /*instantiate_body=*/false));
+    }
+    if (!ND)
+      return nullptr;
+    Scope = ND;
+  }
+  return ND ? cast<NamedDecl>(ND->getCanonicalDecl()) : nullptr;
+}
+
 DeclRef GetNamed(const std::string& name, ConstDeclRef parent /*= nullptr*/) {
   INTEROP_TRACE(name, parent);
   clang::DeclContext* Within = nullptr;
@@ -1448,6 +1587,9 @@ DeclRef GetNamed(const std::string& name, ConstDeclRef parent /*= nullptr*/) {
     Within = llvm::dyn_cast<clang::DeclContext>(D);
   }
   compat::SynthesizingCodeRAII RAII(&getInterp());
+  if (name.find_first_of(":<") != std::string::npos)
+    return INTEROP_RETURN(GetNamedQualified(
+        getSema(), name, Within ? Decl::castFromDeclContext(Within) : nullptr));
   if (Within)
     Within->getPrimaryContext()->buildLookup();
 

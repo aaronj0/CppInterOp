@@ -108,7 +108,10 @@ then global scope will be assumed.}];
 
 def GetNamed : CppInterOpAPI {
   let Doc = [{This function performs a lookup within the specified parent,
-a specific named entity (functions, enums, etcetera).}];
+a specific named entity (functions, enums, etcetera). The name may be
+qualified, and its components may be template-ids. Each component after the
+first is resolved by qualified lookup in the previous one, and template-ids are
+instantiated.}];
 
   let ReturnType = "DeclRef";
   let Args = [
